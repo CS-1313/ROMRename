@@ -1,0 +1,23 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Massive Database Files (Do not upload!)
+*.dat
+*.xml
+*.pkl
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore everything inside the DATPACK folder...
+DATPACK/*
+# ...except for the .gitkeep file so Git tracks the folder itself!
+!DATPACK/.gitkeep

@@ -20,21 +20,10 @@ If you prefer to use your own custom database files (like specific No-Intro or R
 
 ## Features
 
-- **DATPACK Integration**: Ingests massive `.dat` and `.xml` datasets (like No-Intro or ReDump) to build a master database of official game hashes and titles.
-- **Smart Fuzzy Matching**: Uses advanced string comparison (`difflib`) to identify the closest official name for a ROM, even if the filename is messy, abbreviated, or missing words.
-- **Ghost Math Engine**: Automatically strips out common release group tags, version numbers, and extraneous metadata `[!]`, `(USA)`, `(Rev A)` to find the core "ghost" name of the game, vastly improving match accuracy.
-- **Interactive Preview (Master View)**: Before any files are touched, the app generates a virtual plan. You can review the Original Name, the Proposed Name, and the Confidence percentage in a sortable table.
-- **Archive Extraction**: Natively handles `.zip` and `.7z` extraction in isolated sandbox environments during the execution phase.
-- **Safe Execution**: Supports renaming files completely in-place, or copying them to a clean Output Directory.
-
-- **Region Biasing**: Prioritize specific regions (USA, Europe, Japan, World) to automatically break ties when matching multiple regional releases - perfect for building 1G1R (1 Game, 1 ROM) collections.
-- **Clean Naming Toggles**: Automatically strip numbered prefixes or prefer shorter "Base" names (dropping excessive language/revision tags) for a cleaner library.
-- **Manual Action Overrides**: You are in complete control. Click any item in the interactive table to override the automatic decision, force a skip, or explicitly keep the original name.
-- **Smart RAM-Recalculation**: Changed a setting (like Region Bias) after a long scan? The app recalculates the fuzzy math in pure RAM without needing to re-read your hard drive.
-- **Exact Match Bypass**: Skips the heavy fuzzy math algorithm if the original filename already perfectly matches a title in the DAT database.
-- **Diagnostic CSV Receipts**: Both the GUI and CLI generate highly detailed `.csv` Job Receipts capturing exact execution settings, matching stats, and skipped files for perfect QA transparency.
-- **Custom File Exclusions**: Dedicated UI tab to explicitly ignore certain file types (like `.nfo` or `.txt`) so they are safely skipped during batch scans.
-- **Dynamic Confidence Hiding**: Easily toggle visibility to hide skipped files, 100% hashes, or low-confidence matches to keep your Master Preview focused.
+- **Dual-Engine Matching (Hash + Math)**: Ingests massive XML/DAT databases to build a master index. Scanned files are first checked for perfect CRC32 hash hits. If unknown, the "Ghost Math Engine" strips away junk metadata and uses advanced fuzzy string comparison to predict the correct official title.
+- **Interactive Safe-Preview UI**: Review a complete virtual plan before a single file is touched. You can manually override matches, dynamically hide low-confidence items, or tweak Region biases and watch the list recalculate instantly in RAM without re-reading your hard drive.
+- **Granular Library Control (1G1R)**: Dial in your exact preferences to build the perfect clean library. Prioritize specific regions to break ties, automatically strip numbered prefixes, prefer shorter "Base" names, and explicitly exclude junk file types (like `.nfo` or `.txt`).
+- **Bulletproof Execution & QA**: Choose to safely copy files to a new folder or overwrite them in-place. The app natively extracts `.zip` and `.7z` archives in an isolated sandbox, generates highly detailed `.csv` Job Receipts for every run, and includes a full headless CLI for automation.
 
 ## How It Works
 

@@ -756,9 +756,9 @@ class ROMRenameApp:
             writer.writerow([f"# Source: {self.src_var.get()}"])
             writer.writerow([f"# Output: {self.out_var.get()}"])
             writer.writerow(["# --- SETTINGS ---"])
-            writer.writerow([f"# Threshold: {self.slider_var.get()} | Region: {self.region_var.get()} | Strip Nums: {self.n_var.get()} | Base: {self.base_var.get()}"])
-            writer.writerow([f"# Duplicates: {self.dup_var.get()} | Overwrite: {self.inplace_var.get()} | Transfer Rejects: {self.rejects_var.get()}"])
-            writer.writerow([f"# Hide Skipped: {self.hide_skip_var.get()} | Hide 100%: {self.hide_100_var.get()} | Hide Below Thresh: {self.hide_thresh_var.get()}"])
+            writer.writerow([f"# Threshold: {self.slider_var.get()} | Region: {self.region_var.get()} | Strip Nums: {self.strip_num_var.get()} | Base: {self.prefer_base_var.get()}"])
+            writer.writerow([f"# Duplicates: {self.dup_var.get()} | Overwrite: {self.inplace_var.get()} | Transfer Rejects: {self.copy_rejects_var.get()}"])
+            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()}"])
             writer.writerow(["# ---------------------------------------------------------"])
             
             writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])

@@ -21,3 +21,4 @@ Thumbs.db
 DATPACK/*
 # ...except for the .gitkeep file so Git tracks the folder itself!
 !DATPACK/.gitkeep
+Rolling_Smoke_Test.md

@@ -30,12 +30,16 @@ If you prefer to use your own custom database files (like specific No-Intro or R
 - **Region Biasing**: Prioritize specific regions (USA, Europe, Japan, World) to automatically break ties when matching multiple regional releases - perfect for building 1G1R (1 Game, 1 ROM) collections.
 - **Clean Naming Toggles**: Automatically strip numbered prefixes or prefer shorter "Base" names (dropping excessive language/revision tags) for a cleaner library.
 - **Manual Action Overrides**: You are in complete control. Click any item in the interactive table to override the automatic decision, force a skip, or explicitly keep the original name.
-- **Smart Fast-Recalculation**: Changed a setting (like Region Bias) after a long scan? The app instantly recalculates the fuzzy math in pure RAM without needing to re-read your hard drive.
+- **Smart RAM-Recalculation**: Changed a setting (like Region Bias) after a long scan? The app recalculates the fuzzy math in pure RAM without needing to re-read your hard drive.
+- **Exact Match Bypass**: Skips the heavy fuzzy math algorithm if the original filename already perfectly matches a title in the DAT database.
+- **Diagnostic CSV Receipts**: Both the GUI and CLI generate highly detailed `.csv` Job Receipts capturing exact execution settings, matching stats, and skipped files for perfect QA transparency.
+- **Custom File Exclusions**: Dedicated UI tab to explicitly ignore certain file types (like `.nfo` or `.txt`) so they are safely skipped during batch scans.
+- **Dynamic Confidence Hiding**: Easily toggle visibility to hide skipped files, 100% hashes, or low-confidence matches to keep your Master Preview focused.
 
 ## How It Works
 
 1. **Load DATs**: Point the application to your DATPACK folder. It will parse the XML/DAT files and cache the official names and CRC32 hashes.
-2. **Scan**: Point the application to your Source directory containing your ROMs. The app calculates the CRC32 hash of each file for instant perfect matches. If the hash is unknown, it falls back to the Fuzzy/Ghost Math Engine to predict the correct official title.
+2. **Scan**: Point the application to your Source directory containing your ROMs. The app calculates the CRC32 hash of each file for perfect matches. If the hash is unknown, it falls back to the Fuzzy/Ghost Math Engine to predict the correct official title.
 3. **Review**: Check the proposed matches in the UI.
 4. **Execute**: The app automatically renames your files to perfectly match the DAT specifications.
 

@@ -2,6 +2,8 @@
 import sys
 import time
 import argparse
+import csv
+import datetime
 import file_ops
 from engine import MatchEngine
 
@@ -55,6 +57,20 @@ def run_cli():
     eng.strip_n = not args.no_strip_nums
     eng.update_math(eng.is_raw_math, eng.strip_n, print)
 
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_path = os.path.join(output if args.execute else source, f"Job_Receipt_{ts}.csv")
+    csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow([f"# ROMRename CLI {'EXECUTE' if args.execute else 'DRY-RUN'} Log"])
+    csv_writer.writerow([f"# Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
+    csv_writer.writerow([f"# Source: {source}"])
+    csv_writer.writerow([f"# Output: {output}"])
+    csv_writer.writerow(["# --- SETTINGS ---"])
+    csv_writer.writerow([f"# Threshold: {args.threshold} | Region: {args.region} | Strip Nums: {not args.no_strip_nums} | Base: {not args.no_base_only}"])
+    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Max Items: {args.max_items}"])
+    csv_writer.writerow(["# ---------------------------------------------------------"])
+    csv_writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
+
     print("\nStarting scan...")
     start_time = time.time()
     
@@ -105,9 +121,12 @@ def run_cli():
                             is_hash_hit = True
                     except: pass
                 
+                alts = []
                 if not matched_name:
                     clean_name = os.path.splitext(f)[0]
-                    matched_name, confidence, _ = eng.find_match(clean_name, clean_name, 1, args.region)
+                    matched_name, confidence, alts = eng.find_match(clean_name, clean_name, 1, args.region)
+                
+                alts_str = ", ".join([f"{a[0]} ({a[1]}%)" for a in alts])
                 
                 item_time = time.time() - item_start
                 items_processed += 1
@@ -123,6 +142,9 @@ def run_cli():
                     final_name = matched_name + (ext if not is_zip else ".zip")
                     print(f"[{items_processed}] {f} -> {final_name} | {match_type} ({confidence}%) | {item_time:.2f}s")
                     
+                    csv_action = "Renamed" if args.execute else "Simulated Rename (Dry-Run)"
+                    csv_writer.writerow([f, matched_name, f"{confidence}%", match_type, csv_action, alts_str])
+
                     if args.execute:
                         out_path = os.path.join(output, final_name)
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -140,6 +162,7 @@ def run_cli():
                             print(f"  [!] Error processing {f}: {e}")
                 else:
                     skipped += 1
+                    csv_writer.writerow([f, matched_name, f"{confidence}%", match_type if is_hash_hit else "Fuzzy", "Skipped (Below Threshold)", alts_str])
                     print(f"[{items_processed}] {f} -> Skipped (Below Threshold: {confidence}%) | {item_time:.2f}s")
 
     except KeyboardInterrupt:
@@ -157,7 +180,12 @@ def run_cli():
     print(f" 100% Hash Hits        : {hash_hits}")
     print(f" Fuzzy Math Hits       : {fuzzy_hits}")
     print(f" Items Skipped         : {skipped}")
+    print(f" Job Receipt Saved To  : {csv_path}")
     print("="*50 + "\n")
+    
+    try:
+        csv_file.close()
+    except: pass
 
 if __name__ == "__main__":
     run_cli()

@@ -17,6 +17,7 @@ def run_cli():
     parser.add_argument("--max-items", type=int, default=0, help="Maximum number of items to process (0 = infinite)")
     parser.add_argument("--execute", action="store_true", help="Actually rename and move files (Default is Dry-Run)")
     parser.add_argument("--inplace", action="store_true", help="Overwrite original files in the source directory")
+    parser.add_argument("-f", "--force", action="store_true", help="Bypass safety prompts (e.g., for --inplace)")
 
     args = parser.parse_args()
 
@@ -26,6 +27,18 @@ def run_cli():
         return
 
     output = os.path.abspath(args.output) if args.output else source
+
+    if args.execute and args.inplace:
+        if not args.force:
+            print("\n[!!! CRITICAL WARNING !!!]")
+            print("You have selected --inplace execution. This will PERMANENTLY overwrite and rename")
+            print(f"files directly inside your source directory:\n-> {source}\n")
+            confirm = input("Enter 'OVERWRITE' to proceed, or anything else to CANCEL: ")
+            if confirm.strip() != "OVERWRITE":
+                print("\nOperation cancelled by user.")
+                return
+        else:
+            print("\n[!] WARNING: In-place execution triggered with --force. Bypassing safety prompt.")
 
     print("\n" + "="*50)
     print(" ROMRename CLI - " + ("EXECUTE MODE" if args.execute else "DRY-RUN MODE"))

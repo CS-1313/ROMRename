@@ -946,12 +946,33 @@ class ROMRenameApp:
         self.tree.heading(col, command=lambda: self.sort_treeview(col, not reverse))
 
     def start_execute(self):
+        from tkinter import messagebox
+        import threading
+        import time
         if not self.virtual_plan:
             messagebox.showinfo("Execute", "Nothing to execute. Run scan first.")
             return
         if not self.inplace_var.get() and not self.out_var.get():
             messagebox.showerror("Error", "Please select an output folder.")
             return
+            
+        if self.is_scanning:
+            if messagebox.askyesno("Scan in Progress", "A scan is currently running or paused.\n\nExecuting now will safely cancel the remainder of the scan and process only the items found so far.\n\nDo you want to proceed?"):
+                self.log("Waiting for Scanner to safely finish its last file...")
+                self.cancel_flag = True
+                self.is_paused = False
+                self.pause_btn.config(state="disabled")
+                
+                def wait_and_exec():
+                    while self.is_scanning:
+                        time.sleep(0.2)
+                    self.cancel_flag = False
+                    self.root.after(0, lambda: self.pause_btn.config(state="normal", text="Pause"))
+                    threading.Thread(target=self.exec_thread, daemon=True).start()
+                    
+                threading.Thread(target=wait_and_exec, daemon=True).start()
+            return
+
         self.is_paused = False
         self.cancel_flag = False
         self.pause_btn.config(text="Pause")

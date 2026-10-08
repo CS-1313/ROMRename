@@ -686,6 +686,7 @@ class ROMRenameApp:
                             with zipfile.ZipFile(filepath, 'r') as zf:
                                 for info in zf.infolist():
                                     crc = "%08X".lower() % (info.CRC & 0xFFFFFFFF)
+                                    if crc == "00000000": continue
                                     if crc in self.engine.hash_db:
                                         matched_name = self.engine.hash_db[crc]
                                         confidence = 100

@@ -33,7 +33,7 @@ class MatchEngine:
                             if name: self.name_db.append(name)
                             for rom in game.findall('rom'):
                                 crc = rom.get('crc', '').lower()
-                                if crc and name:
+                                if crc and crc != "00000000" and name:
                                     self.hash_db[crc] = name
                                     count += 1
                     except: pass

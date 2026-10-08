@@ -69,6 +69,44 @@ python3 main.py
 ```
 
 
+
+## ⚡ Command Line Interface (CLI)
+
+ROMRename includes a powerful, headless CLI tailored for server admins, power users, and automated scripting. By default, the CLI is completely safe and runs in **Dry-Run Mode**, meaning it will only print a preview to your terminal and will *not* modify any files on your hard drive.
+
+### Basic Usage
+**1. Test a folder (Dry-Run):**
+```bash
+python main.py --source "E:\Games"
+```
+
+**2. Execute and copy renamed files to a new folder:**
+```bash
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --execute
+```
+
+**3. Execute and overwrite the original files (DANGEROUS):**
+```bash
+python main.py --source "E:\Games" --execute --inplace
+```
+*(Note: Using `--inplace` will instantly trigger a safety prompt. To bypass this prompt in automated scripts, simply append `-f` or `--force`).*
+
+### CLI Flags Reference
+| Flag | Description | Default |
+|---|---|---|
+| `-s`, `--source` | **(Required)** Path to the source directory containing ROMs | |
+| `-o`, `--output` | Path to the output directory (if copying) | Same as source |
+| `--execute` | Actually rename/move the files | `False` (Dry-Run) |
+| `--inplace` | Overwrite original files directly in the source folder | `False` |
+| `-f`, `--force` | Bypass the safety confirmation prompt for `--inplace` | `False` |
+| `-t`, `--threshold` | Minimum confidence score to rename a file (1-100) | `90` |
+| `-r`, `--region` | Prioritize a region (e.g., `"USA"`, `"Japan"`) | `"None (Raw Math)"`|
+| `--max-items` | Limit the number of items to scan (useful for quick tests) | `0` (Infinite) |
+| `--no-strip-nums` | Do NOT strip prefix numbers (e.g., `01 - Mario`) before math | `False` |
+| `--no-base-only`  | Allow Rev/Beta/Demo tags in matches | `False` |
+
+*All CLI executions automatically generate a `Job_Receipt_YYYYMMDD_HHMMSS.csv` in your source folder!*
+
 ## Roadmap
 - **Multi-threading Support**: Implementing concurrent processing to analyze and rename multiple ROMs simultaneously, drastically improving completion time for massive libraries.
 

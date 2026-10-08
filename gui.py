@@ -116,6 +116,7 @@ class ROMRenameApp:
         self.search_var = tk.StringVar()
         search_entry = tk.Entry(search_frame, textvariable=self.search_var)
         search_entry.pack(side="left", fill="x", expand=True, padx=5)
+        tk.Button(search_frame, text="Export Audit CSV", bg="#d9edf7", command=self.export_audit_csv).pack(side="left", padx=5)
         search_entry.bind("<KeyRelease>", self.refresh_preview)
         tk.Label(slider_frame, text="Fuzzy Match Confidence Threshold:").pack(side="left")
         self.slider_var = tk.IntVar(value=90)
@@ -741,6 +742,66 @@ class ROMRenameApp:
         self.log("Scan complete!")
         self.is_scanning = False
 
+    def _write_csv_log(self, job_type):
+        import csv
+        import datetime
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        prefix = "Job_Receipt" if job_type == "Receipt" else "Audit"
+        filename = os.path.join(self.app_dir, f"{prefix}_{ts}.csv")
+        
+        with open(filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([f"# ROMRename {job_type} Log"])
+            writer.writerow([f"# Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
+            writer.writerow([f"# Source: {self.src_var.get()}"])
+            writer.writerow([f"# Output: {self.out_var.get()}"])
+            writer.writerow(["# --- SETTINGS ---"])
+            writer.writerow([f"# Threshold: {self.slider_var.get()} | Region: {self.region_var.get()} | Strip Nums: {self.n_var.get()} | Base: {self.base_var.get()}"])
+            writer.writerow([f"# Duplicates: {self.dup_var.get()} | Overwrite: {self.inplace_var.get()} | Transfer Rejects: {self.rejects_var.get()}"])
+            writer.writerow([f"# Hide Skipped: {self.hide_skip_var.get()} | Hide 100%: {self.hide_100_var.get()} | Hide Below Thresh: {self.hide_thresh_var.get()}"])
+            writer.writerow(["# ---------------------------------------------------------"])
+            
+            writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
+            
+            vp_dict = {v[0]: v for v in self.virtual_plan}
+            
+            for res in self.scan_results:
+                orig = res.get("original", "")
+                prop = res.get("proposed", "")
+                conf = res.get("confidence", 0)
+                is_hash = res.get("is_hash", False)
+                is_exc = res.get("is_excluded", False)
+                
+                match_type = "Excluded" if is_exc else ("Hash Hit" if is_hash else "Fuzzy")
+                alts = res.get("alternatives", [])
+                alts_str = ", ".join([f"{a[0]} ({a[1]}%)" for a in alts])
+                
+                if orig in self.name_overrides:
+                    prop = self.name_overrides[orig]
+                    match_type = "Manual Override"
+                    conf = 100
+                
+                action = "Skipped"
+                if orig in vp_dict:
+                    action = vp_dict[orig][2]
+                elif is_exc:
+                    action = "Skipped (Excluded)"
+                elif conf < self.slider_var.get():
+                    action = "Skipped (Below Threshold)"
+                    
+                writer.writerow([orig, prop, f"{conf}%", match_type, action, alts_str])
+        
+        return filename
+
+    def export_audit_csv(self):
+        if not self.scan_results:
+            from tkinter import messagebox
+            messagebox.showinfo("Export Audit", "No scan results to export! Run a scan first.")
+            return
+        filename = self._write_csv_log("Audit")
+        from tkinter import messagebox
+        messagebox.showinfo("Export Complete", f"Audit CSV successfully exported to:\n{filename}")
+
     def _add_to_preview(self, res, threshold, auto_scroll=True):
         def passes_search(*fields):
             s = getattr(self, 'search_var', None)
@@ -901,12 +962,6 @@ class ROMRenameApp:
         src = self.src_var.get()
         out = src if self.inplace_var.get() else self.out_var.get()
         
-        log_path = os.path.join(self.app_dir, f"Scan_Log_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.txt")
-        log_lines = [f"ROMRename Job Run - {datetime.datetime.now()}"]
-        log_lines.append(f"Source: {src}")
-        log_lines.append(f"Output: {out}")
-        log_lines.append("-" * 40)
-        
         total = len(self.virtual_plan)
         start_time = time.time()
         last_ui = time.time()
@@ -916,10 +971,10 @@ class ROMRenameApp:
                 self.log(self.pending_pause_msg)
                 self.pending_pause_msg = ""
             while self.is_paused and not self.cancel_flag:
+                import time
                 time.sleep(0.1)
             if self.cancel_flag:
                 self.log("Execution cancelled.")
-                log_lines.append("--- JOB CANCELLED BY USER ---")
                 break
                 
             src_path = os.path.join(src, orig)
@@ -929,45 +984,37 @@ class ROMRenameApp:
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 if action == "Keep Original Name":
                     file_ops.copy_standard_file(src_path, out_path)
-                    log_lines.append(f"Kept Original Name: {orig}")
                 else:
                     if is_zip:
                         temp_dir = os.path.join(self.app_dir, "TEMP_WORKSPACE")
                         file_ops.process_zip_rename(src_path, out_path, final, temp_dir)
                         if self.inplace_var.get() and orig != final:
                             os.remove(src_path)
-                        log_lines.append(f"Re-Zipped: {orig} -> {final}")
                     else:
                         if self.inplace_var.get():
                             os.rename(src_path, out_path)
                         else:
                             file_ops.copy_standard_file(src_path, out_path)
-                        log_lines.append(f"Renamed: {orig} -> {final}")
                 self.log(f"Processed: {final}")
             except Exception as e:
                 self.log(f"Error on {orig}: {e}")
                 self.log_error(f"Execution Error on {orig}", e)
-                log_lines.append(f"ERROR on {orig}: {e}")
                 
-            self.prog_var.set(((i + 1) / total) * 100)
-            
-            curr_time = time.time()
-            if curr_time - last_ui > 0.05:
-                elapsed = curr_time - start_time
-                if elapsed > 0:
-                    speed = (i + 1) / elapsed
-                    rem_sec = (total - (i + 1)) / speed
+            if time.time() - last_ui > 0.1:
+                self.prog_var.set(((i + 1) / total) * 100)
+                elapsed = time.time() - start_time
+                if i > 0:
+                    rem_sec = (elapsed / i) * (total - i)
                     h, m, s = int(rem_sec // 3600), int((rem_sec % 3600) // 60), int(rem_sec % 60)
                     self.eta_var.set(f"ETA: {h}H {m}M {s}S" if h > 0 else f"ETA: {m}M {s}S")
                 self.root.update_idletasks()
-                last_ui = curr_time
-            
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(log_lines))
-            
+                last_ui = time.time()
+                
         self.prog_var.set(0)
         self.eta_var.set("ETA: --:--")
-        self.log(f"Job finished. Log saved to {log_path}")
+        
+        receipt_file = self._write_csv_log("Receipt")
+        from tkinter import messagebox
+        messagebox.showinfo("Job Complete", f"Execution finished successfully.\nReceipt saved to:\n{receipt_file}")
+        self.log(f"Job finished. Receipt saved to {receipt_file}")
         self.is_scanning = False
-        if not self.cancel_flag: messagebox.showinfo("Success", "Execution complete!")
-

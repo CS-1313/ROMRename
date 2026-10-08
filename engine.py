@@ -7,6 +7,7 @@ class MatchEngine:
     def __init__(self):
         self.hash_db = {}
         self.name_db = []
+        self.name_set = set()
         self.ghost_db = {}
         self.ghost_list = []
         self.is_raw_math = False
@@ -37,6 +38,7 @@ class MatchEngine:
                                     self.hash_db[crc] = name
                                     count += 1
                     except: pass
+        self.name_set = set(self.name_db)
         logger_func(f"Loaded {count} hashes from DATs.")
         return count > 0
 
@@ -90,12 +92,21 @@ class MatchEngine:
         alts = []
         if self.is_raw_math:
             if self.strip_n: clean_name = self.clean_string(clean_name, strip_num=True, strip_tags=False)
+            
+            if clean_name in self.name_set:
+                return clean_name, 100, [(clean_name, 100)]
+                
             matches = difflib.get_close_matches(clean_name, self.name_db, n=curr_n, cutoff=0.01)
             for m in matches:
                 c = int(difflib.SequenceMatcher(None, clean_name, m).ratio() * 100)
                 alts.append((m, c))
         else:
             ghost_orig = self.clean_string(clean_name, strip_num=self.strip_n, strip_tags=True)
+            
+            if ghost_orig in self.ghost_db:
+                sorted_reals = self.break_ties_list(self.ghost_db[ghost_orig], orig_raw, region_setting)
+                return sorted_reals[0], 100, [(r, 100) for r in sorted_reals[:curr_n]]
+                
             matches = difflib.get_close_matches(ghost_orig, self.ghost_list, n=curr_n, cutoff=0.01)
             for ghost in matches:
                 c = int(difflib.SequenceMatcher(None, ghost_orig, ghost).ratio() * 100)

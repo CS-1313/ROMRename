@@ -49,6 +49,10 @@ class ROMRenameApp:
         self.tab_exclusions = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_exclusions, text="Exclusions")
         
+        self.current_tab = 0
+        self.switching_tabs = False
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+        
         # --- TAB 3: EXCLUSIONS ---
         exc_top = tk.Frame(self.tab_exclusions)
         exc_top.pack(fill="x", padx=10, pady=5)
@@ -289,7 +293,77 @@ class ROMRenameApp:
             tree.item(child, text=state + text[2:])
             self.toggle_children(tree, child, state)
 
-    def save_exclusions(self):
+    def has_unsaved_exclusions(self):
+        current_exts = set()
+        for item in self.tree_exts.get_children():
+            if self.tree_exts.item(item, "text").startswith("☑ "):
+                current_exts.add(self.tree_exts.item(item, "values")[0])
+        if current_exts != self.excluded_exts:
+            return True
+            
+        current_folders = set()
+        def collect_folders(node=""):
+            for child in self.tree_folders.get_children(node):
+                if self.tree_folders.item(child, "text").startswith("☑ "):
+                    current_folders.add(self.tree_folders.item(child, "values")[0])
+                collect_folders(child)
+        collect_folders()
+        if current_folders != self.excluded_folders:
+            return True
+            
+        return False
+
+    def revert_exclusion_trees(self):
+        for item in self.tree_exts.get_children():
+            ext = self.tree_exts.item(item, "values")[0]
+            state = "☑ " if ext in self.excluded_exts else "☐ "
+            self.tree_exts.item(item, text=f"{state}{ext}")
+            
+        def revert_folders(node=""):
+            for child in self.tree_folders.get_children(node):
+                f_rel = self.tree_folders.item(child, "values")[0]
+                d_name = os.path.basename(f_rel) if f_rel else ""
+                state = "☑ " if f_rel in self.excluded_folders else "☐ "
+                self.tree_folders.item(child, text=f"{state}{d_name}")
+                revert_folders(child)
+        revert_folders()
+
+    def on_tab_changed(self, event):
+        if getattr(self, 'switching_tabs', False):
+            return
+            
+        new_tab = self.notebook.index("current")
+        try: exc_tab_idx = self.notebook.index(self.tab_exclusions)
+        except: exc_tab_idx = 2
+        
+        # If user is navigating away from Exclusions tab
+        if getattr(self, 'current_tab', 0) == exc_tab_idx and new_tab != exc_tab_idx:
+            if self.has_unsaved_exclusions():
+                ans = messagebox.askyesnocancel(
+                    "Unsaved Exclusions",
+                    "You have unsaved changes in the Exclusions tab.\n\n"
+                    "Would you like to save them before leaving?\n\n"
+                    "• Yes: Save changes and proceed\n"
+                    "• No: Discard changes and proceed\n"
+                    "• Cancel: Return to Exclusions tab"
+                )
+                if ans is True:
+                    self.save_exclusions(show_feedback=False)
+                    self.current_tab = new_tab
+                elif ans is False:
+                    self.revert_exclusion_trees()
+                    self.current_tab = new_tab
+                else:
+                    self.switching_tabs = True
+                    self.notebook.select(self.tab_exclusions)
+                    self.switching_tabs = False
+                    return
+            else:
+                self.current_tab = new_tab
+        else:
+            self.current_tab = new_tab
+
+    def save_exclusions(self, show_feedback=True):
         self.excluded_exts = set()
         self.excluded_folders = set()
         for item in self.tree_exts.get_children():
@@ -310,7 +384,6 @@ class ROMRenameApp:
             msg = "A scan is currently running.\n\nWould you like to pause the scan, update the math for the items scanned so far with these exclusions, and then Resume?"
             if messagebox.askyesno("Recalculate", msg):
                 self.update_math_engine()
-                import threading
                 threading.Thread(target=self.recalc_thread, args=(True,), daemon=True).start()
             else:
                 self.is_paused = False
@@ -318,8 +391,10 @@ class ROMRenameApp:
         elif len(self.scan_results) > 0:
             if messagebox.askyesno("Recalculate", "Would you like to apply these exclusions to the current preview?"):
                 self.update_math_engine()
-                import threading
                 threading.Thread(target=self.recalc_thread, args=(False,), daemon=True).start()
+        else:
+            if show_feedback:
+                messagebox.showinfo("Exclusions Saved", f"Successfully saved {len(self.excluded_folders)} folder exclusion(s) and {len(self.excluded_exts)} extension exclusion(s).")
 
     def destroy_active_cb(self, event=None):
         if getattr(self, 'active_cb', None):

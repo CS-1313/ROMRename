@@ -1,4 +1,4 @@
-﻿# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -22,3 +22,5 @@ DATPACK/*
 # ...except for the .gitkeep file so Git tracks the folder itself!
 !DATPACK/.gitkeep
 Rolling_Smoke_Test.md
+Job_Receipt_*.csv
+Audit_*.csv

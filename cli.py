@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import time
 import argparse
@@ -58,7 +58,10 @@ def run_cli():
     eng.update_math(eng.is_raw_math, eng.strip_n, print)
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_path = os.path.join(output if args.execute else source, f"Job_Receipt_{ts}.csv")
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    receipts_dir = os.path.join(app_dir, "Logs", "Job Receipts")
+    os.makedirs(receipts_dir, exist_ok=True)
+    csv_path = os.path.join(receipts_dir, f"Job_Receipt_{ts}.csv")
     csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow([f"# ROMRename CLI {'EXECUTE' if args.execute else 'DRY-RUN'} Log"])

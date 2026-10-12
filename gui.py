@@ -860,8 +860,13 @@ class ROMRenameApp:
         import csv
         import datetime
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        prefix = "Job_Receipt" if job_type == "Receipt" else "Audit"
-        filename = os.path.join(self.app_dir, f"{prefix}_{ts}.csv")
+        is_receipt = (job_type == "Receipt")
+        subfolder = "Job Receipts" if is_receipt else "Audits"
+        prefix = "Job_Receipt" if is_receipt else "Audit"
+        
+        target_dir = os.path.join(self.app_dir, "Logs", subfolder)
+        os.makedirs(target_dir, exist_ok=True)
+        filename = os.path.join(target_dir, f"{prefix}_{ts}.csv")
         
         with open(filename, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)

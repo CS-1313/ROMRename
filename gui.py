@@ -21,6 +21,7 @@ class ROMRenameApp:
         self.name_overrides = {}
         self.excluded_exts = set()
         self.excluded_folders = set()
+        self.tree_item_to_orig = {}
         
         self.is_paused = False
         self.cancel_flag = False
@@ -180,6 +181,9 @@ class ROMRenameApp:
         
         self.hide_low_conf_var = tk.BooleanVar(value=False)
         tk.Checkbutton(frame_filters, text="Hide items below Confidence Threshold", variable=self.hide_low_conf_var, command=self.refresh_preview).grid(row=3, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+        
+        self.hide_paths_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(frame_filters, text='Hide Path Names in "Original" Column', variable=self.hide_paths_var, command=self.refresh_preview).grid(row=4, column=0, columnspan=2, sticky="w", padx=10, pady=5)
         
         frame_engine = tk.LabelFrame(self.tab_settings, text="Ghost Math Engine Preferences")
         frame_engine.pack(fill="x", padx=10, pady=10)
@@ -457,7 +461,7 @@ class ROMRenameApp:
         x, y, width, height = bbox
         
         values = list(self.tree.item(row_id, "values"))
-        orig_name = values[2]
+        orig_name = getattr(self, 'tree_item_to_orig', {}).get(row_id, values[2])
         
         if col_id == '#1':
             current_action = values[0]
@@ -727,6 +731,7 @@ class ROMRenameApp:
         self.is_scanning = True
         self.scan_results.clear()
         self.virtual_plan.clear()
+        self.tree_item_to_orig.clear()
         for item in self.tree.get_children(): self.tree.delete(item)
             
         self.seen_names = {}
@@ -877,7 +882,7 @@ class ROMRenameApp:
             writer.writerow(["# --- SETTINGS ---"])
             writer.writerow([f"# Threshold: {self.slider_var.get()} | Region: {self.region_var.get()} | Strip Nums: {self.strip_num_var.get()} | Base: {self.prefer_base_var.get()}"])
             writer.writerow([f"# Duplicates: {self.dup_var.get()} | Overwrite: {self.inplace_var.get()} | Transfer Rejects: {self.copy_rejects_var.get()}"])
-            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()}"])
+            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()} | Hide Paths: {getattr(self, 'hide_paths_var', tk.BooleanVar(value=False)).get()}"])
             writer.writerow(["# ---------------------------------------------------------"])
             
             writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
@@ -933,6 +938,7 @@ class ROMRenameApp:
                     return True
             return False
         orig = res["original"]
+        orig_display = os.path.basename(orig) if getattr(self, 'hide_paths_var', None) and self.hide_paths_var.get() else orig
         prop = res["proposed"]
         conf = res["confidence"]
         ext = os.path.splitext(orig)[1] if not res["is_zip"] else ".zip"
@@ -988,12 +994,13 @@ class ROMRenameApp:
             hide_visually = False
             if self.hide_hash_var.get() and conf == 100 and not forced_name_tuple:
                 hide_visually = True
-            if not passes_search(action, status, orig, final_name, f"{conf}%"):
+            if not passes_search(action, status, orig, orig_display, final_name, f"{conf}%"):
                 hide_visually = True
                 
             item_id = None
             if not hide_visually:
-                item_id = self.tree.insert("", "end", values=(action, status, orig, final_name, f"{conf}%"), tags=tags)
+                item_id = self.tree.insert("", "end", values=(action, status, orig_display, final_name, f"{conf}%"), tags=tags)
+                self.tree_item_to_orig[item_id] = orig
                 
             if "Duplicate" not in action:
                 self.virtual_plan.append((orig, final_name, action, res["is_zip"]))
@@ -1017,12 +1024,13 @@ class ROMRenameApp:
             if self.hide_low_conf_var.get() and not forced_action and not forced_name_tuple:
                 # Anything in this else block without a forced action is below threshold!
                 hide_visually = True
-            if not passes_search(action, status, orig, proposed_display, f"{conf}%"):
+            if not passes_search(action, status, orig, orig_display, proposed_display, f"{conf}%"):
                 hide_visually = True
                 
             if not hide_visually:
                 tags = ("override",) if (forced_action or forced_name_tuple) else (row_tag,)
-                item_id = self.tree.insert("", "end", values=(action, status, orig, proposed_display, f"{conf}%"), tags=tags)
+                item_id = self.tree.insert("", "end", values=(action, status, orig_display, proposed_display, f"{conf}%"), tags=tags)
+                self.tree_item_to_orig[item_id] = orig
                 
             if action == "Keep Original Name":
                 self.virtual_plan.append((orig, orig, action, res["is_zip"]))
@@ -1035,6 +1043,7 @@ class ROMRenameApp:
         current_scroll = self.tree.yview()
 
         self.destroy_active_cb()
+        self.tree_item_to_orig.clear()
         for item in self.tree.get_children():
             self.tree.delete(item)
             

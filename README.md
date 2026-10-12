@@ -1,10 +1,10 @@
-﻿<div align="center">
+<div align="center">
   <img src="media/logo/ROMRename_logo.png" alt="ROMRename Logo" width="100%">
 </div>
 
 # ROMRename
 
-ROMRename is a powerful, GUI-driven utility for batch renaming, organizing, and matching ROM files against official standard DAT files (.dat/.xml). It eliminates the hassle of manually renaming poorly labeled ROMs so they can be seamlessly scraped by frontends like Daijishō.
+ROMRename is a powerful, GUI and CLI-driven utility for batch renaming, organizing, and matching ROM files against official standard DAT files (.dat/.xml). It eliminates the hassle of manually renaming poorly labeled ROMs so they can be seamlessly scraped by frontends like [Daijishō](https://github.com/TapiocaFox/Daijishou).
 
 ## Installation & Download Options
 
@@ -98,7 +98,7 @@ python main.py --source "E:\Games" --execute --inplace
 | `--no-strip-nums` | Do NOT strip prefix numbers (e.g., `01 - Mario`) before math | `False` |
 | `--no-base-only`  | Allow Rev/Beta/Demo tags in matches | `False` |
 
-*All CLI executions automatically generate a `Job_Receipt_YYYYMMDD_HHMMSS.csv` in your source folder!*
+*All CLI executions automatically generate a `Job_Receipt_YYYYMMDD_HHMMSS.csv` in your source's `Logs/Job Receipts/` directory!*
 
 ## Roadmap
 - **Multi-threading Support**: Implementing concurrent processing to analyze and rename multiple ROMs simultaneously, drastically improving completion time for massive libraries.

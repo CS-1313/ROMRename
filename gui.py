@@ -84,7 +84,8 @@ class ROMRenameApp:
         
         exc_bot = tk.Frame(self.tab_exclusions)
         exc_bot.pack(fill="x", padx=10, pady=5)
-        tk.Button(exc_bot, text="Save Exclusions", command=self.save_exclusions, bg="lightgreen", font=("Arial", 10, "bold")).pack(side="right")
+        tk.Button(exc_bot, text="Save Exclusions", command=self.save_exclusions, bg="lightgreen", font=("Arial", 10, "bold")).pack(side="right", padx=5)
+        tk.Button(exc_bot, text="Clear Exclusions", command=self.clear_exclusions, bg="#ffdddd", font=("Arial", 10)).pack(side="right", padx=5)
         
         # --- TAB 1: DASHBOARD ---
         frame_paths = tk.LabelFrame(self.tab_main, text="1. Setup Paths & Scan")
@@ -395,6 +396,31 @@ class ROMRenameApp:
         else:
             if show_feedback:
                 messagebox.showinfo("Exclusions Saved", f"Successfully saved {len(self.excluded_folders)} folder exclusion(s) and {len(self.excluded_exts)} extension exclusion(s).")
+
+    def clear_exclusions(self):
+        if not self.excluded_folders and not self.excluded_exts and not self.has_unsaved_exclusions():
+            messagebox.showinfo("Clear Exclusions", "There are no exclusions to clear.")
+            return
+
+        if not messagebox.askyesno("Clear Exclusions", "Are you sure you want to clear all exclusions and start fresh?"):
+            return
+
+        for item in self.tree_exts.get_children():
+            ext = self.tree_exts.item(item, "values")[0]
+            self.tree_exts.item(item, text=f"☐ {ext}")
+
+        def uncheck_folders(node=""):
+            for child in self.tree_folders.get_children(node):
+                f_rel = self.tree_folders.item(child, "values")[0]
+                d_name = os.path.basename(f_rel) if f_rel else ""
+                self.tree_folders.item(child, text=f"☐ {d_name}")
+                uncheck_folders(child)
+        uncheck_folders()
+
+        self.save_exclusions(show_feedback=False)
+        self.log("All exclusions cleared.")
+        if len(self.scan_results) == 0 and not self.is_scanning:
+            messagebox.showinfo("Exclusions Cleared", "All exclusions have been cleared.")
 
     def destroy_active_cb(self, event=None):
         if getattr(self, 'active_cb', None):

@@ -185,6 +185,9 @@ class ROMRenameApp:
         self.hide_paths_var = tk.BooleanVar(value=False)
         tk.Checkbutton(frame_filters, text='Hide Path Names in "Original" Column', variable=self.hide_paths_var, command=self.refresh_preview).grid(row=4, column=0, columnspan=2, sticky="w", padx=10, pady=5)
         
+        self.mirror_tree_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(frame_filters, text="Mirror Source Folder Tree", variable=self.mirror_tree_var, command=self.refresh_preview).grid(row=5, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+        
         frame_engine = tk.LabelFrame(self.tab_settings, text="Ghost Math Engine Preferences")
         frame_engine.pack(fill="x", padx=10, pady=10)
         
@@ -882,7 +885,7 @@ class ROMRenameApp:
             writer.writerow(["# --- SETTINGS ---"])
             writer.writerow([f"# Threshold: {self.slider_var.get()} | Region: {self.region_var.get()} | Strip Nums: {self.strip_num_var.get()} | Base: {self.prefer_base_var.get()}"])
             writer.writerow([f"# Duplicates: {self.dup_var.get()} | Overwrite: {self.inplace_var.get()} | Transfer Rejects: {self.copy_rejects_var.get()}"])
-            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()} | Hide Paths: {getattr(self, 'hide_paths_var', tk.BooleanVar(value=False)).get()}"])
+            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()} | Hide Paths: {getattr(self, 'hide_paths_var', tk.BooleanVar(value=False)).get()} | Mirror Tree: {getattr(self, 'mirror_tree_var', tk.BooleanVar(value=True)).get()}"])
             writer.writerow(["# ---------------------------------------------------------"])
             
             writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
@@ -938,6 +941,8 @@ class ROMRenameApp:
                     return True
             return False
         orig = res["original"]
+        rel_dir = os.path.dirname(orig)
+        is_mirrored = self.inplace_var.get() or (getattr(self, 'mirror_tree_var', None) and self.mirror_tree_var.get())
         orig_display = os.path.basename(orig) if getattr(self, 'hide_paths_var', None) and self.hide_paths_var.get() else orig
         prop = res["proposed"]
         conf = res["confidence"]
@@ -976,18 +981,23 @@ class ROMRenameApp:
                     status = "\u25CF Manual Override"
                     row_tag = "override"
             
-            if final_name in self.seen_names:
+            target_key = os.path.join(rel_dir, final_name) if (is_mirrored and rel_dir) else final_name
+            if target_key in self.seen_names:
                 if self.dup_var.get() == "ignore":
                     action = "Skip File (Duplicate)"
                     status = "\u25CF Duplicate"
                     row_tag = "duplicate"
                     final_name = "None"
+                    dest_rel = "None"
                 else:
-                    self.seen_names[final_name] += 1
-                    final_name = f"{prop} ({self.seen_names[final_name]}){ext}"
+                    self.seen_names[target_key] += 1
+                    count = self.seen_names[target_key]
+                    final_name = f"{prop} ({count}){ext}"
+                    dest_rel = os.path.join(rel_dir, final_name) if (is_mirrored and rel_dir) else final_name
                     if not forced_action: action = "Rename (Appended)"
             else:
-                self.seen_names[final_name] = 0
+                self.seen_names[target_key] = 0
+                dest_rel = target_key
                 
             tags = ("override",) if (forced_action or forced_name_tuple) else (row_tag,)
             
@@ -1003,7 +1013,7 @@ class ROMRenameApp:
                 self.tree_item_to_orig[item_id] = orig
                 
             if "Duplicate" not in action:
-                self.virtual_plan.append((orig, final_name, action, res["is_zip"]))
+                self.virtual_plan.append((orig, dest_rel, action, res["is_zip"]))
         else:
             action = forced_action if forced_action else "Skip File (Leave in Source)"
             if not forced_action and not forced_name_tuple:
@@ -1033,7 +1043,8 @@ class ROMRenameApp:
                 self.tree_item_to_orig[item_id] = orig
                 
             if action == "Keep Original Name":
-                self.virtual_plan.append((orig, orig, action, res["is_zip"]))
+                dest_reject = orig if is_mirrored else os.path.basename(orig)
+                self.virtual_plan.append((orig, dest_reject, action, res["is_zip"]))
                 
         if item_id and auto_scroll:
             self.tree.see(item_id)
@@ -1151,7 +1162,7 @@ class ROMRenameApp:
                 else:
                     if is_zip:
                         temp_dir = os.path.join(self.app_dir, "TEMP_WORKSPACE")
-                        file_ops.process_zip_rename(src_path, out_path, final, temp_dir)
+                        file_ops.process_zip_rename(src_path, out_path, os.path.basename(final), temp_dir)
                         if self.inplace_var.get() and orig != final:
                             os.remove(src_path)
                     else:

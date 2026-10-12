@@ -84,11 +84,17 @@ python main.py --source "E:\Games" --execute --inplace
 ```
 *(Note: Using `--inplace` will instantly trigger a safety prompt. To bypass this prompt in automated scripts, simply append `-f` or `--force`).*
 
+**4. Execute, copy to a new folder, and mirror subfolder structure:**
+```bash
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --execute
+```
+
 ### CLI Flags Reference
 | Flag | Description | Default |
 |---|---|---|
 | `-s`, `--source` | **(Required)** Path to the source directory containing ROMs | |
 | `-o`, `--output` | Path to the output directory (if copying) | Same as source |
+| `--keep-tree` | Preserve and mirror the source directory structure in the output folder | `False` |
 | `--execute` | Actually rename/move the files | `False` (Dry-Run) |
 | `--inplace` | Overwrite original files directly in the source folder | `False` |
 | `-f`, `--force` | Bypass the safety confirmation prompt for `--inplace` | `False` |

@@ -19,6 +19,7 @@ def run_cli():
     parser.add_argument("--max-items", type=int, default=0, help="Maximum number of items to process (0 = infinite)")
     parser.add_argument("--execute", action="store_true", help="Actually rename and move files (Default is Dry-Run)")
     parser.add_argument("--inplace", action="store_true", help="Overwrite original files in the source directory")
+    parser.add_argument("--keep-tree", action="store_true", help="Preserve and mirror the source directory structure in the output folder")
     parser.add_argument("-f", "--force", action="store_true", help="Bypass safety prompts (e.g., for --inplace)")
 
     args = parser.parse_args()
@@ -70,7 +71,7 @@ def run_cli():
     csv_writer.writerow([f"# Output: {output}"])
     csv_writer.writerow(["# --- SETTINGS ---"])
     csv_writer.writerow([f"# Threshold: {args.threshold} | Region: {args.region} | Strip Nums: {not args.no_strip_nums} | Base: {not args.no_base_only}"])
-    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Max Items: {args.max_items}"])
+    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Keep Tree: {args.keep_tree} | Max Items: {args.max_items}"])
     csv_writer.writerow(["# ---------------------------------------------------------"])
     csv_writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
 
@@ -92,6 +93,7 @@ def run_cli():
                     raise KeyboardInterrupt  # trigger graceful exit
 
                 filepath = os.path.join(source, rel_dir, f) if rel_dir else os.path.join(source, f)
+                rel_path = os.path.join(rel_dir, f) if rel_dir else f
                 ext = os.path.splitext(f)[1].lower()
                 
                 item_start = time.time()
@@ -143,18 +145,20 @@ def run_cli():
                         match_type = "Fuzzy"
                         
                     final_name = matched_name + (ext if not is_zip else ".zip")
-                    print(f"[{items_processed}] {f} -> {final_name} | {match_type} ({confidence}%) | {item_time:.2f}s")
+                    is_mirrored = args.inplace or args.keep_tree
+                    dest_rel = os.path.join(rel_dir, final_name) if (is_mirrored and rel_dir) else final_name
+                    print(f"[{items_processed}] {rel_path} -> {dest_rel} | {match_type} ({confidence}%) | {item_time:.2f}s")
                     
                     csv_action = "Renamed" if args.execute else "Simulated Rename (Dry-Run)"
-                    csv_writer.writerow([f, matched_name, f"{confidence}%", match_type, csv_action, alts_str])
+                    csv_writer.writerow([rel_path, matched_name, f"{confidence}%", match_type, csv_action, alts_str])
 
                     if args.execute:
-                        out_path = os.path.join(output, final_name)
+                        out_path = os.path.join(output, dest_rel)
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
                         try:
                             if is_zip:
-                                file_ops.process_zip_rename(filepath, out_path, final_name, "TEMP_WORKSPACE")
-                                if args.inplace and f != final_name:
+                                file_ops.process_zip_rename(filepath, out_path, os.path.basename(final_name), "TEMP_WORKSPACE")
+                                if args.inplace and filepath != out_path:
                                     os.remove(filepath)
                             else:
                                 if args.inplace:
@@ -162,11 +166,11 @@ def run_cli():
                                 else:
                                     file_ops.copy_standard_file(filepath, out_path)
                         except Exception as e:
-                            print(f"  [!] Error processing {f}: {e}")
+                            print(f"  [!] Error processing {rel_path}: {e}")
                 else:
                     skipped += 1
-                    csv_writer.writerow([f, matched_name, f"{confidence}%", match_type if is_hash_hit else "Fuzzy", "Skipped (Below Threshold)", alts_str])
-                    print(f"[{items_processed}] {f} -> Skipped (Below Threshold: {confidence}%) | {item_time:.2f}s")
+                    csv_writer.writerow([rel_path, matched_name, f"{confidence}%", match_type if is_hash_hit else "Fuzzy", "Skipped (Below Threshold)", alts_str])
+                    print(f"[{items_processed}] {rel_path} -> Skipped (Below Threshold: {confidence}%) | {item_time:.2f}s")
 
     except KeyboardInterrupt:
         print("\n\n[!] Process Interrupted (Graceful Shutdown).")

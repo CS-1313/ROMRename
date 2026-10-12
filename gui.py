@@ -1,4 +1,4 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os, zipfile, threading, datetime, difflib, zlib
 import xml.etree.ElementTree as ET
@@ -217,8 +217,11 @@ class ROMRenameApp:
         self.progress = ttk.Progressbar(frame_exec, variable=self.prog_var, maximum=100)
         self.progress.pack(side="left", fill="x", expand=True, padx=10)
         
+        self.items_var = tk.StringVar(value="Items Remaining: --/--")
+        tk.Label(frame_exec, textvariable=self.items_var, font=("Arial", 9, "bold")).pack(side="left", padx=5)
+
         self.eta_var = tk.StringVar(value="ETA: --:--")
-        tk.Label(frame_exec, textvariable=self.eta_var, width=12, font=("Arial", 9, "bold")).pack(side="left")
+        tk.Label(frame_exec, textvariable=self.eta_var, width=14, font=("Arial", 9, "bold")).pack(side="left", padx=5)
         
         tk.Button(frame_exec, text="EXECUTE", command=self.start_execute, bg="lightgreen", font=("Arial", 10, "bold")).pack(side="right", padx=5)
         
@@ -536,6 +539,7 @@ class ROMRenameApp:
         self.log("Recalculating fuzzy math in memory...")
         original_eta = self.eta_var.get()
         original_prog = self.prog_var.get()
+        original_items = self.items_var.get()
         self.eta_var.set("Recalculating...")
         
         curr_is_raw = self.engine.is_raw_math
@@ -544,6 +548,7 @@ class ROMRenameApp:
         curr_ghost_list = self.engine.ghost_list
         
         total = len(self.scan_results)
+        self.items_var.set(f"Items Remaining: 0/{total:,}" if total > 0 else "Items Remaining: --/--")
         start_time = time.time()
         last_ui = time.time()
         
@@ -580,6 +585,7 @@ class ROMRenameApp:
                     rem_sec = (total - (i + 1)) / speed
                     h, m, s = int(rem_sec // 3600), int((rem_sec % 3600) // 60), int(rem_sec % 60)
                     self.eta_var.set(f"Recalc ETA: {h}H {m}M {s}S" if h > 0 else f"Recalc ETA: {m}M {s}S")
+                self.items_var.set(f"Items Remaining: {i + 1:,}/{total:,}")
                 self.root.update_idletasks()
                 last_ui = curr_time
                         
@@ -588,10 +594,12 @@ class ROMRenameApp:
         if was_scanning_active:
             self.prog_var.set(original_prog)
             self.eta_var.set(original_eta)
+            self.items_var.set(original_items)
             self.log("Recalculation complete! Click 'Resume' to continue scanning.")
         else:
             self.prog_var.set(0)
             self.eta_var.set("ETA: --:--")
+            self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")
             self.log("Recalculation complete!")
 
     def start_scan(self):
@@ -623,6 +631,7 @@ class ROMRenameApp:
         self.seen_names = {}
         self.prog_var.set(0)
         self.eta_var.set("ETA: --:--")
+        self.items_var.set("Items Remaining: --/--")
         
         if not self.engine.load_dats(self.dat_var.get(), self.log): 
             self.is_scanning = False
@@ -641,6 +650,7 @@ class ROMRenameApp:
                 if os.path.isfile(os.path.join(src, fname)):
                     files.append(("", fname))
         total = len(files)
+        self.items_var.set(f"Items Remaining: 0/{total:,}" if total > 0 else "Items Remaining: --/--")
         
         self.update_math_engine()
         start_time = time.time()
@@ -656,6 +666,7 @@ class ROMRenameApp:
             if self.cancel_flag:
                 self.prog_var.set(0)
                 self.eta_var.set("ETA: --:--")
+                self.items_var.set("Items Remaining: --/--")
                 self.log("Scan cancelled.")
                 self.is_scanning = False
                 self.refresh_preview()
@@ -734,11 +745,13 @@ class ROMRenameApp:
                     rem_sec = (total - (i + 1)) / speed
                     h, m, s = int(rem_sec // 3600), int((rem_sec % 3600) // 60), int(rem_sec % 60)
                     self.eta_var.set(f"ETA: {h}H {m}M {s}S" if h > 0 else f"ETA: {m}M {s}S")
+                self.items_var.set(f"Items Remaining: {i + 1:,}/{total:,}")
                 self.root.update_idletasks()
                 last_ui = curr_time
             
         self.prog_var.set(0)
         self.eta_var.set("ETA: --:--")
+        self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")
         self.log("Scan complete!")
         self.is_scanning = False
 
@@ -984,6 +997,9 @@ class ROMRenameApp:
         out = src if self.inplace_var.get() else self.out_var.get()
         
         total = len(self.virtual_plan)
+        self.prog_var.set(0)
+        self.eta_var.set("ETA: --:--")
+        self.items_var.set(f"Items Remaining: 0/{total:,}" if total > 0 else "Items Remaining: --/--")
         start_time = time.time()
         last_ui = time.time()
         
@@ -995,6 +1011,7 @@ class ROMRenameApp:
                 import time
                 time.sleep(0.1)
             if self.cancel_flag:
+                self.items_var.set("Items Remaining: --/--")
                 self.log("Execution cancelled.")
                 break
                 
@@ -1028,11 +1045,13 @@ class ROMRenameApp:
                     rem_sec = (elapsed / i) * (total - i)
                     h, m, s = int(rem_sec // 3600), int((rem_sec % 3600) // 60), int(rem_sec % 60)
                     self.eta_var.set(f"ETA: {h}H {m}M {s}S" if h > 0 else f"ETA: {m}M {s}S")
+                self.items_var.set(f"Items Remaining: {i + 1:,}/{total:,}")
                 self.root.update_idletasks()
                 last_ui = time.time()
                 
         self.prog_var.set(0)
         self.eta_var.set("ETA: --:--")
+        self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")
         
         receipt_file = self._write_csv_log("Receipt")
         from tkinter import messagebox

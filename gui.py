@@ -959,9 +959,6 @@ class ROMRenameApp:
         self.tree.heading(col, command=lambda: self.sort_treeview(col, not reverse))
 
     def start_execute(self):
-        from tkinter import messagebox
-        import threading
-        import time
         if not self.virtual_plan:
             messagebox.showinfo("Execute", "Nothing to execute. Run scan first.")
             return
@@ -977,8 +974,11 @@ class ROMRenameApp:
                 self.pause_btn.config(state="disabled")
                 
                 def wait_and_exec():
-                    while self.is_scanning:
+                    waited = 0.0
+                    while self.is_scanning and waited < 5.0:
                         time.sleep(0.2)
+                        waited += 0.2
+                    self.is_scanning = False
                     self.cancel_flag = False
                     self.root.after(0, lambda: self.pause_btn.config(state="normal", text="Pause"))
                     threading.Thread(target=self.exec_thread, daemon=True).start()
@@ -992,6 +992,18 @@ class ROMRenameApp:
         threading.Thread(target=self.exec_thread, daemon=True).start()
 
     def exec_thread(self):
+        try:
+            self._exec_thread_impl()
+        except Exception as e:
+            self.log("Execution failed due to a critical error.")
+            self.log_error("exec_thread crashed", e)
+        finally:
+            self.is_scanning = False
+            self.cancel_flag = False
+            self.is_paused = False
+            self.root.after(0, lambda: self.pause_btn.config(state="normal", text="Pause"))
+
+    def _exec_thread_impl(self):
         self.is_scanning = True
         src = self.src_var.get()
         out = src if self.inplace_var.get() else self.out_var.get()
@@ -1008,7 +1020,6 @@ class ROMRenameApp:
                 self.log(self.pending_pause_msg)
                 self.pending_pause_msg = ""
             while self.is_paused and not self.cancel_flag:
-                import time
                 time.sleep(0.1)
             if self.cancel_flag:
                 self.items_var.set("Items Remaining: --/--")
@@ -1054,7 +1065,5 @@ class ROMRenameApp:
         self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")
         
         receipt_file = self._write_csv_log("Receipt")
-        from tkinter import messagebox
         messagebox.showinfo("Job Complete", f"Execution finished successfully.\nReceipt saved to:\n{receipt_file}")
         self.log(f"Job finished. Receipt saved to {receipt_file}")
-        self.is_scanning = False

@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 import shutil
 import file_ops
 from engine import MatchEngine
+import parallel
 import time
 import re
 
@@ -26,6 +27,7 @@ class ROMRenameApp:
         self.is_paused = False
         self.cancel_flag = False
         self.is_scanning = False  
+        self.engine_version = 0
         
         
         self.active_cb = None
@@ -215,6 +217,21 @@ class ROMRenameApp:
         
         self.debug_var = tk.BooleanVar(value=False)
         tk.Checkbutton(frame_engine, text="Debug Mode (Log Errors)", variable=self.debug_var).grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        
+        frame_proc = tk.LabelFrame(self.tab_settings, text="Processing Mode")
+        frame_proc.pack(fill="x", padx=10, pady=10)
+        
+        self.proc_mode_var = tk.StringVar(value="single")
+        tk.Radiobutton(frame_proc, text="Single-Thread (Stable Default)", variable=self.proc_mode_var, value="single").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        tk.Radiobutton(frame_proc, text="Multi-Core (Auto-scales to your CPU & RAM)", variable=self.proc_mode_var, value="multi").grid(row=0, column=1, sticky="w", padx=10, pady=5)
+        self.max_workers = max(1, parallel.logical_cpus() - 1)
+        frame_w = tk.Frame(frame_proc)
+        frame_w.grid(row=1, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+        tk.Label(frame_w, text="Worker Processes (Multi-Core):").pack(side="left")
+        self.workers_var = tk.IntVar(value=self.max_workers)
+        tk.Spinbox(frame_w, from_=1, to=self.max_workers, textvariable=self.workers_var, width=5).pack(side="left", padx=5)
+        tk.Label(frame_w, text=f"(Recommended: {self.max_workers})").pack(side="left")
+        tk.Label(frame_proc, text=parallel.describe_system() + f" -> up to {self.max_workers} worker processes", fg="gray").grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=5)
         
         # --- GLOBAL UI (Outside Notebook) ---
         frame_exec = tk.Frame(self.root)
@@ -587,6 +604,12 @@ class ROMRenameApp:
         is_raw = (self.region_var.get() == "None (Raw Math)")
         strip_n = self.strip_num_var.get()
         self.engine.update_math(is_raw, strip_n, self.log)
+        self.engine_version += 1
+
+    def get_worker_count(self):
+        try: w = int(self.workers_var.get())
+        except: w = self.max_workers
+        return max(1, min(w, self.max_workers))
 
     def on_smart_setting_change(self, event=None):
         if not self.scan_results and not self.is_scanning:
@@ -660,6 +683,81 @@ class ROMRenameApp:
         start_time = time.time()
         last_ui = time.time()
         
+        if self.proc_mode_var.get() == "multi":
+            fuzzy = []
+            for i, res in enumerate(self.scan_results):
+                if self.cancel_flag: return
+                rel_path = res["original"]
+                rel_dir = os.path.dirname(rel_path)
+                ext = os.path.splitext(rel_path)[1].lower()
+                is_excluded_now = self.check_excluded(rel_dir, ext)
+                res["is_excluded"] = is_excluded_now
+                if is_excluded_now:
+                    res["proposed"] = ""
+                    res["confidence"] = 0
+                    res["is_hash"] = False
+                    res["alternatives"] = []
+                elif not res.get("is_hash", False):
+                    fuzzy.append(res)
+            fuzz_total = len(fuzzy)
+            done = 0
+
+            def update_progress():
+                nonlocal done, last_ui
+                done += 1
+                self.prog_var.set((done / fuzz_total) * 100)
+                curr_time = time.time()
+                if curr_time - last_ui > 0.05:
+                    elapsed = curr_time - start_time
+                    if elapsed > 0:
+                        speed = done / elapsed
+                        rem_sec = (fuzz_total - done) / speed
+                        h, m, s = int(rem_sec // 3600), int((rem_sec % 3600) // 60), int(rem_sec % 60)
+                        self.eta_var.set(f"Recalc ETA: {h}H {m}M {s}S" if h > 0 else f"Recalc ETA: {m}M {s}S")
+                    self.items_var.set(f"Items Remaining: {done:,}/{fuzz_total:,}")
+                    self.root.update_idletasks()
+                    last_ui = curr_time
+
+            if fuzz_total < 8:
+                for res in fuzzy:
+                    if self.cancel_flag: return
+                    orig_raw = os.path.splitext(os.path.basename(res["original"]))[0]
+                    try: curr_n = self.n_var.get()
+                    except: curr_n = 4
+                    res["proposed"], res["confidence"], res["alternatives"] = self.engine.find_match(orig_raw, orig_raw, curr_n, self.region_var.get())
+                    update_progress()
+            else:
+                pipeline = parallel.OrderedMatchPipeline(self.engine, self.get_worker_count(), self.log)
+                try:
+                    for res in fuzzy:
+                        if self.cancel_flag:
+                            pipeline.close(cancel=True)
+                            return
+                        orig_raw = os.path.splitext(os.path.basename(res["original"]))[0]
+                        try: curr_n = self.n_var.get()
+                        except: curr_n = 4
+                        for r, result in pipeline.submit(res, (orig_raw, orig_raw, curr_n, self.region_var.get())):
+                            r["proposed"], r["confidence"], r["alternatives"] = result
+                            update_progress()
+                    for r, result in pipeline.drain():
+                        r["proposed"], r["confidence"], r["alternatives"] = result
+                        update_progress()
+                finally:
+                    pipeline.close()
+            self.refresh_preview()
+            
+            if was_scanning_active:
+                self.prog_var.set(original_prog)
+                self.eta_var.set(original_eta)
+                self.items_var.set(original_items)
+                self.log("Recalculation complete! Click 'Resume' to continue scanning.")
+            else:
+                self.prog_var.set(0)
+                self.eta_var.set("ETA: --:--")
+                self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")
+                self.log("Recalculation complete!")
+            return
+        
         for i, res in enumerate(self.scan_results):
             if self.cancel_flag: return
             
@@ -730,6 +828,36 @@ class ROMRenameApp:
         finally:
             self.is_scanning = False
             
+    def _hash_lookup(self, filepath, ext):
+        matched_name = ""
+        confidence = 0
+        is_zip = False
+        is_hash_hit = False
+        if ext in ['.zip', '.7z']:
+            is_zip = True
+            if ext == '.zip':
+                try:
+                    import zipfile
+                    with zipfile.ZipFile(filepath, 'r') as zf:
+                        for info in zf.infolist():
+                            crc = "%08X".lower() % (info.CRC & 0xFFFFFFFF)
+                            if crc == "00000000": continue
+                            if crc in self.engine.hash_db:
+                                matched_name = self.engine.hash_db[crc]
+                                confidence = 100
+                                is_hash_hit = True
+                                break
+                except: pass
+        else:
+            try:
+                crc = file_ops.calc_crc(filepath)
+                if crc in self.engine.hash_db:
+                    matched_name = self.engine.hash_db[crc]
+                    confidence = 100
+                    is_hash_hit = True
+            except: pass
+        return matched_name, confidence, is_zip, is_hash_hit
+
     def _scan_thread_impl(self):
         self.is_scanning = True
         self.scan_results.clear()
@@ -765,6 +893,10 @@ class ROMRenameApp:
         start_time = time.time()
         last_ui = time.time()
         
+        if self.proc_mode_var.get() == "multi":
+            self._scan_files_parallel(src, files, total, start_time)
+            return
+        
         for i, (rel_dir, f) in enumerate(files):
             if self.is_paused and getattr(self, 'pending_pause_msg', ""):
                 self.log(self.pending_pause_msg)
@@ -799,29 +931,7 @@ class ROMRenameApp:
             alts = []
             
             if not is_excluded:
-                if ext in ['.zip', '.7z']:
-                    is_zip = True
-                    if ext == '.zip':
-                        try:
-                            import zipfile
-                            with zipfile.ZipFile(filepath, 'r') as zf:
-                                for info in zf.infolist():
-                                    crc = "%08X".lower() % (info.CRC & 0xFFFFFFFF)
-                                    if crc == "00000000": continue
-                                    if crc in self.engine.hash_db:
-                                        matched_name = self.engine.hash_db[crc]
-                                        confidence = 100
-                                        is_hash_hit = True
-                                        break
-                        except: pass
-                else:
-                    try:
-                        crc = file_ops.calc_crc(filepath)
-                        if crc in self.engine.hash_db:
-                            matched_name = self.engine.hash_db[crc]
-                            confidence = 100
-                            is_hash_hit = True
-                    except: pass
+                matched_name, confidence, is_zip, is_hash_hit = self._hash_lookup(filepath, ext)
                 
                 if not matched_name:
                     clean_name = os.path.splitext(f)[0]
@@ -858,6 +968,115 @@ class ROMRenameApp:
                 self.root.update_idletasks()
                 last_ui = curr_time
             
+        self.prog_var.set(0)
+        self.eta_var.set("ETA: --:--")
+        self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")
+        self.log("Scan complete!")
+        self.is_scanning = False
+
+    def _scan_files_parallel(self, src, files, total, start_time):
+        self.log(parallel.describe_system())
+        pipeline = parallel.OrderedMatchPipeline(self.engine, self.get_worker_count(), self.log)
+        pipe_version = self.engine_version
+        self.log(f"Multi-Core mode: {pipeline.workers} worker process(es) started.")
+        done = 0
+        last_ui = time.time()
+
+        def emit(payload, result):
+            nonlocal done, last_ui
+            rel_path, f, is_zip, is_hash_hit, is_excluded, p_matched, p_conf, version, clean_name, curr_n = payload
+            if result is not None:
+                matched_name, confidence, alts = result
+            else:
+                alts = []
+                matched_name, confidence = p_matched, p_conf
+            if result is not None and version != self.engine_version:
+                matched_name, confidence, alts = self.engine.find_match(clean_name, clean_name, curr_n, self.region_var.get())
+            res = {
+                "original": rel_path,
+                "proposed": matched_name,
+                "confidence": confidence,
+                "is_zip": is_zip,
+                "is_hash": is_hash_hit,
+                "alternatives": alts,
+                "is_excluded": is_excluded
+            }
+            self.scan_results.append(res)
+            self._add_to_preview(res, self.slider_var.get(), auto_scroll=False)
+            self.log(f"Scanned {f} -> {matched_name} ({confidence}%)")
+            done += 1
+            self.prog_var.set((done / total) * 100)
+            curr_time = time.time()
+            if curr_time - last_ui > 0.05:
+                elapsed = curr_time - start_time
+                if elapsed > 0:
+                    speed = done / elapsed
+                    rem_sec = (total - done) / speed
+                    h, m, s = int(rem_sec // 3600), int((rem_sec % 3600) // 60), int(rem_sec % 60)
+                    self.eta_var.set(f"ETA: {h}H {m}M {s}S" if h > 0 else f"ETA: {m}M {s}S")
+                self.items_var.set(f"Items Remaining: {done:,}/{total:,}")
+                self.root.update_idletasks()
+                last_ui = curr_time
+
+        try:
+            for rel_dir, f in files:
+                if self.is_paused and getattr(self, 'pending_pause_msg', ""):
+                    self.log(self.pending_pause_msg)
+                    self.pending_pause_msg = ""
+                if self.is_paused:
+                    for p, r in pipeline.drain():
+                        emit(p, r)
+                while self.is_paused and not self.cancel_flag:
+                    time.sleep(0.1)
+                if not self.cancel_flag and self.engine_version != pipe_version:
+                    pipeline.close()
+                    pipeline = parallel.OrderedMatchPipeline(self.engine, self.get_worker_count(), self.log)
+                    pipe_version = self.engine_version
+                    self.log("Multi-Core workers restarted with updated math settings.")
+                if self.cancel_flag:
+                    self.prog_var.set(0)
+                    self.eta_var.set("ETA: --:--")
+                    self.items_var.set("Items Remaining: --/--")
+                    self.log("Scan cancelled.")
+                    self.is_scanning = False
+                    self.refresh_preview()
+                    return
+
+                filepath = os.path.join(src, rel_dir, f) if rel_dir else os.path.join(src, f)
+                rel_path = os.path.join(rel_dir, f) if rel_dir else f
+                ext = os.path.splitext(f)[1].lower()
+
+                is_excluded = self.check_excluded(rel_dir, ext)
+
+                matched_name = ""
+                confidence = 0
+                is_zip = False
+                is_hash_hit = False
+                if not is_excluded:
+                    matched_name, confidence, is_zip, is_hash_hit = self._hash_lookup(filepath, ext)
+                clean_name = os.path.splitext(f)[0]
+                try: curr_n = self.n_var.get()
+                except: curr_n = 4
+                match_args = None
+                if not is_excluded and not matched_name:
+                    match_args = (clean_name, clean_name, curr_n, self.region_var.get())
+                payload = (rel_path, f, is_zip, is_hash_hit, is_excluded, matched_name, confidence, self.engine_version, clean_name, curr_n)
+                for p, r in pipeline.submit(payload, match_args):
+                    emit(p, r)
+
+            for p, r in pipeline.drain():
+                if self.cancel_flag:
+                    self.prog_var.set(0)
+                    self.eta_var.set("ETA: --:--")
+                    self.items_var.set("Items Remaining: --/--")
+                    self.log("Scan cancelled.")
+                    self.is_scanning = False
+                    self.refresh_preview()
+                    return
+                emit(p, r)
+        finally:
+            pipeline.close(cancel=self.cancel_flag)
+
         self.prog_var.set(0)
         self.eta_var.set("ETA: --:--")
         self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")

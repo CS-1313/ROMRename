@@ -20,6 +20,8 @@ def run_cli():
     parser.add_argument("--execute", action="store_true", help="Actually rename and move files (Default is Dry-Run)")
     parser.add_argument("--inplace", action="store_true", help="Overwrite original files in the source directory")
     parser.add_argument("--keep-tree", action="store_true", help="Preserve and mirror the source directory structure in the output folder")
+    parser.add_argument("--multithread", action="store_true", help="Use multiple CPU cores for fuzzy matching (worker count auto-scales to your CPU threads and free RAM)")
+    parser.add_argument("--workers", type=int, default=0, help="Max worker processes for --multithread (0 = auto)")
     parser.add_argument("-f", "--force", action="store_true", help="Bypass safety prompts (e.g., for --inplace)")
 
     args = parser.parse_args()
@@ -72,6 +74,7 @@ def run_cli():
     csv_writer.writerow(["# --- SETTINGS ---"])
     csv_writer.writerow([f"# Threshold: {args.threshold} | Region: {args.region} | Strip Nums: {not args.no_strip_nums} | Base: {not args.no_base_only}"])
     csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Keep Tree: {args.keep_tree} | Max Items: {args.max_items}"])
+    csv_writer.writerow([f"# Multithread: {args.multithread} | Workers: {args.workers or 'auto'}"])
     csv_writer.writerow(["# ---------------------------------------------------------"])
     csv_writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
 
@@ -83,97 +86,156 @@ def run_cli():
     fuzzy_hits = 0
     skipped = 0
 
-    try:
-        for root_dir, dirs, files in os.walk(source):
-            rel_dir = os.path.relpath(root_dir, source)
-            if rel_dir == '.': rel_dir = ""
+    pipeline = None
+    max_reached = False
+
+    def hash_lookup(filepath, ext):
+        matched_name = ""
+        confidence = 0
+        is_zip = False
+        is_hash_hit = False
+        if ext in ['.zip', '.7z']:
+            is_zip = True
+            if ext == '.zip':
+                try:
+                    import zipfile
+                    with zipfile.ZipFile(filepath, 'r') as zf:
+                        for info in zf.infolist():
+                            crc = "%08X".lower() % (info.CRC & 0xFFFFFFFF)
+                            if crc == "00000000": continue
+                            if crc in eng.hash_db:
+                                matched_name = eng.hash_db[crc]
+                                confidence = 100
+                                is_hash_hit = True
+                                break
+                except: pass
+        else:
+            try:
+                crc = file_ops.calc_crc(filepath)
+                if crc in eng.hash_db:
+                    matched_name = eng.hash_db[crc]
+                    confidence = 100
+                    is_hash_hit = True
+            except: pass
+        return matched_name, confidence, is_zip, is_hash_hit
+
+    def finalize(rel_dir, f, rel_path, filepath, ext, is_zip, is_hash_hit, matched_name, confidence, alts, item_time):
+        nonlocal items_processed, hash_hits, fuzzy_hits, skipped
+        alts_str = ", ".join([f"{a[0]} ({a[1]}%)" for a in alts])
+        
+        items_processed += 1
+        
+        if confidence >= args.threshold:
+            if is_hash_hit:
+                hash_hits += 1
+                match_type = "Hash Hit"
+            else:
+                fuzzy_hits += 1
+                match_type = "Fuzzy"
+                
+            final_name = matched_name + (ext if not is_zip else ".zip")
+            is_mirrored = args.inplace or args.keep_tree
+            dest_rel = os.path.join(rel_dir, final_name) if (is_mirrored and rel_dir) else final_name
+            print(f"[{items_processed}] {rel_path} -> {dest_rel} | {match_type} ({confidence}%) | {item_time:.2f}s")
             
-            for f in files:
-                if args.max_items > 0 and items_processed >= args.max_items:
-                    raise KeyboardInterrupt  # trigger graceful exit
+            csv_action = "Renamed" if args.execute else "Simulated Rename (Dry-Run)"
+            csv_writer.writerow([rel_path, matched_name, f"{confidence}%", match_type, csv_action, alts_str])
 
-                filepath = os.path.join(source, rel_dir, f) if rel_dir else os.path.join(source, f)
-                rel_path = os.path.join(rel_dir, f) if rel_dir else f
-                ext = os.path.splitext(f)[1].lower()
-                
-                item_start = time.time()
-                matched_name = ""
-                confidence = 0
-                is_zip = False
-                is_hash_hit = False
-                
-                if ext in ['.zip', '.7z']:
-                    is_zip = True
-                    if ext == '.zip':
-                        try:
-                            import zipfile
-                            with zipfile.ZipFile(filepath, 'r') as zf:
-                                for info in zf.infolist():
-                                    crc = "%08X".lower() % (info.CRC & 0xFFFFFFFF)
-                                    if crc == "00000000": continue
-                                    if crc in eng.hash_db:
-                                        matched_name = eng.hash_db[crc]
-                                        confidence = 100
-                                        is_hash_hit = True
-                                        break
-                        except: pass
-                else:
-                    try:
-                        crc = file_ops.calc_crc(filepath)
-                        if crc in eng.hash_db:
-                            matched_name = eng.hash_db[crc]
-                            confidence = 100
-                            is_hash_hit = True
-                    except: pass
-                
-                alts = []
-                if not matched_name:
-                    clean_name = os.path.splitext(f)[0]
-                    matched_name, confidence, alts = eng.find_match(clean_name, clean_name, 1, args.region)
-                
-                alts_str = ", ".join([f"{a[0]} ({a[1]}%)" for a in alts])
-                
-                item_time = time.time() - item_start
-                items_processed += 1
-                
-                if confidence >= args.threshold:
-                    if is_hash_hit:
-                        hash_hits += 1
-                        match_type = "Hash Hit"
+            if args.execute:
+                out_path = os.path.join(output, dest_rel)
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                try:
+                    if is_zip:
+                        file_ops.process_zip_rename(filepath, out_path, os.path.basename(final_name), "TEMP_WORKSPACE")
+                        if args.inplace and filepath != out_path:
+                            os.remove(filepath)
                     else:
-                        fuzzy_hits += 1
-                        match_type = "Fuzzy"
-                        
-                    final_name = matched_name + (ext if not is_zip else ".zip")
-                    is_mirrored = args.inplace or args.keep_tree
-                    dest_rel = os.path.join(rel_dir, final_name) if (is_mirrored and rel_dir) else final_name
-                    print(f"[{items_processed}] {rel_path} -> {dest_rel} | {match_type} ({confidence}%) | {item_time:.2f}s")
-                    
-                    csv_action = "Renamed" if args.execute else "Simulated Rename (Dry-Run)"
-                    csv_writer.writerow([rel_path, matched_name, f"{confidence}%", match_type, csv_action, alts_str])
+                        if args.inplace:
+                            os.rename(filepath, out_path)
+                        else:
+                            file_ops.copy_standard_file(filepath, out_path)
+                except Exception as e:
+                    print(f"  [!] Error processing {rel_path}: {e}")
+        else:
+            skipped += 1
+            csv_writer.writerow([rel_path, matched_name, f"{confidence}%", match_type if is_hash_hit else "Fuzzy", "Skipped (Below Threshold)", alts_str])
+            print(f"[{items_processed}] {rel_path} -> Skipped (Below Threshold: {confidence}%) | {item_time:.2f}s")
 
-                    if args.execute:
-                        out_path = os.path.join(output, dest_rel)
-                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                        try:
-                            if is_zip:
-                                file_ops.process_zip_rename(filepath, out_path, os.path.basename(final_name), "TEMP_WORKSPACE")
-                                if args.inplace and filepath != out_path:
-                                    os.remove(filepath)
-                            else:
-                                if args.inplace:
-                                    os.rename(filepath, out_path)
-                                else:
-                                    file_ops.copy_standard_file(filepath, out_path)
-                        except Exception as e:
-                            print(f"  [!] Error processing {rel_path}: {e}")
-                else:
-                    skipped += 1
-                    csv_writer.writerow([rel_path, matched_name, f"{confidence}%", match_type if is_hash_hit else "Fuzzy", "Skipped (Below Threshold)", alts_str])
-                    print(f"[{items_processed}] {rel_path} -> Skipped (Below Threshold: {confidence}%) | {item_time:.2f}s")
+    def process_completed(payload, result):
+        rel_dir, f, rel_path, filepath, ext, is_zip, is_hash_hit, p_matched, p_conf, p_start = payload
+        if result is not None:
+            matched_name, confidence, alts = result
+        else:
+            alts = []
+            matched_name, confidence = p_matched, p_conf
+        item_time = time.time() - p_start
+        finalize(rel_dir, f, rel_path, filepath, ext, is_zip, is_hash_hit, matched_name, confidence, alts, item_time)
+
+    if args.multithread:
+        import parallel
+        print(parallel.describe_system())
+        pipeline = parallel.OrderedMatchPipeline(eng, args.workers, print)
+        print(f"Multi-Core mode: {pipeline.workers} worker process(es)")
+
+    try:
+        if args.multithread:
+            submitted = 0
+            for root_dir, dirs, files in os.walk(source):
+                rel_dir = os.path.relpath(root_dir, source)
+                if rel_dir == '.': rel_dir = ""
+                for f in files:
+                    if args.max_items > 0 and submitted >= args.max_items:
+                        max_reached = True
+                        raise KeyboardInterrupt
+
+                    filepath = os.path.join(source, rel_dir, f) if rel_dir else os.path.join(source, f)
+                    rel_path = os.path.join(rel_dir, f) if rel_dir else f
+                    ext = os.path.splitext(f)[1].lower()
+
+                    item_start = time.time()
+                    matched_name, confidence, is_zip, is_hash_hit = hash_lookup(filepath, ext)
+                    clean_name = os.path.splitext(f)[0]
+                    match_args = None
+                    if not matched_name:
+                        match_args = (clean_name, clean_name, 1, args.region)
+                    payload = (rel_dir, f, rel_path, filepath, ext, is_zip, is_hash_hit, matched_name, confidence, item_start)
+                    submitted += 1
+                    for p, result in pipeline.submit(payload, match_args):
+                        process_completed(p, result)
+            for p, result in pipeline.drain():
+                process_completed(p, result)
+        else:
+            for root_dir, dirs, files in os.walk(source):
+                rel_dir = os.path.relpath(root_dir, source)
+                if rel_dir == '.': rel_dir = ""
+                for f in files:
+                    if args.max_items > 0 and items_processed >= args.max_items:
+                        raise KeyboardInterrupt  # trigger graceful exit
+
+                    filepath = os.path.join(source, rel_dir, f) if rel_dir else os.path.join(source, f)
+                    rel_path = os.path.join(rel_dir, f) if rel_dir else f
+                    ext = os.path.splitext(f)[1].lower()
+
+                    item_start = time.time()
+                    matched_name, confidence, is_zip, is_hash_hit = hash_lookup(filepath, ext)
+                    alts = []
+                    if not matched_name:
+                        clean_name = os.path.splitext(f)[0]
+                        matched_name, confidence, alts = eng.find_match(clean_name, clean_name, 1, args.region)
+
+                    item_time = time.time() - item_start
+                    finalize(rel_dir, f, rel_path, filepath, ext, is_zip, is_hash_hit, matched_name, confidence, alts, item_time)
 
     except KeyboardInterrupt:
         print("\n\n[!] Process Interrupted (Graceful Shutdown).")
+        if pipeline is not None and max_reached:
+            for p, result in pipeline.drain():
+                process_completed(p, result)
+        elif pipeline is not None:
+            pipeline.close(cancel=True)
+    finally:
+        if pipeline is not None:
+            pipeline.close()
 
     total_time = time.time() - start_time
     avg_time = (total_time / items_processed) if items_processed > 0 else 0

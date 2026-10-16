@@ -61,6 +61,10 @@ sudo apt-get install python3-tk
 python3 main.py
 ```
 
+### Processing Mode (Single-Thread vs Multi-Core)
+
+The Settings & Engine tab includes a **Processing Mode** toggle. **Single-Thread** is the default and is completely unchanged — Python's GIL limits a single process to one core, which is why single-thread mode shows only ~1/N of total CPU. **Multi-Core** spawns worker processes to parallelize fuzzy matching; the worker count equals your logical CPU threads minus one, further capped so workers use at most ~50% of your free RAM. The **Worker Processes** spin box defaults to the recommended count for your computer and can be lowered if you want to leave more CPU free. Workers run at below-normal priority, keeping your PC responsive during large jobs. If the workers cannot start, ROMRename falls back to single-thread matching automatically.
+
 
 
 ## ⚡ Command Line Interface (CLI)
@@ -89,12 +93,19 @@ python main.py --source "E:\Games" --execute --inplace
 python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --execute
 ```
 
+**5. Use all available CPU cores (Multi-Core mode):**
+```bash
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --multithread --execute
+```
+
 ### CLI Flags Reference
 | Flag | Description | Default |
 |---|---|---|
 | `-s`, `--source` | **(Required)** Path to the source directory containing ROMs | |
 | `-o`, `--output` | Path to the output directory (if copying) | Same as source |
 | `--keep-tree` | Preserve and mirror the source directory structure in the output folder | `False` |
+| `--multithread` | Use multiple CPU cores for fuzzy matching. Worker count auto-scales to your CPU threads (leaving one free) and available RAM | `False` |
+| `--workers` | Cap the number of worker processes used by `--multithread` | `0` (Auto) |
 | `--execute` | Actually rename/move the files | `False` (Dry-Run) |
 | `--inplace` | Overwrite original files directly in the source folder | `False` |
 | `-f`, `--force` | Bypass the safety confirmation prompt for `--inplace` | `False` |
@@ -105,7 +116,4 @@ python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --exe
 | `--no-base-only`  | Allow Rev/Beta/Demo tags in matches | `False` |
 
 *All CLI executions automatically generate a `Job_Receipt_YYYYMMDD_HHMMSS.csv` in your source's `Logs/Job Receipts/` directory!*
-
-## Roadmap
-- **Multi-threading Support**: Implementing concurrent processing to analyze and rename multiple ROMs simultaneously, drastically improving completion time for massive libraries.
 

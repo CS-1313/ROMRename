@@ -93,7 +93,13 @@ python main.py --source "E:\Games" --execute --inplace
 python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --execute
 ```
 
-**5. Use all available CPU cores (Multi-Core mode):**
+**5. Mirror the subfolder structure AND keep empty folders:**
+```bash
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree-empty --execute
+```
+*(Note: `--keep-tree-empty` already includes `--keep-tree`, so you don't need both. After the files are copied, every source subfolder still missing from the output is recreated, including folders whose files were all skipped. It is ignored with `--inplace` (the folders are already there) and skipped if you interrupt the run with Ctrl+C. This matches the GUI's **Transfer Empty Folders** option.)*
+
+**6. Use all available CPU cores (Multi-Core mode):**
 ```bash
 python main.py --source "E:\Games" --output "E:\Games_Renamed" --multithread --execute
 ```
@@ -104,6 +110,7 @@ python main.py --source "E:\Games" --output "E:\Games_Renamed" --multithread --e
 | `-s`, `--source` | **(Required)** Path to the source directory containing ROMs | |
 | `-o`, `--output` | Path to the output directory (if copying) | Same as source |
 | `--keep-tree` | Preserve and mirror the source directory structure in the output folder | `False` |
+| `--keep-tree-empty` | Same as `--keep-tree`, and also recreate source subfolders that end up empty in the output | `False` |
 | `--multithread` | Use multiple CPU cores for fuzzy matching. Worker count auto-scales to your CPU threads (leaving one free) and available RAM | `False` |
 | `--workers` | Cap the number of worker processes used by `--multithread` | `0` (Auto) |
 | `--execute` | Actually rename/move the files | `False` (Dry-Run) |

@@ -8,6 +8,10 @@ import file_ops
 from engine import MatchEngine
 
 def run_cli():
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except Exception:
+        pass
     parser = argparse.ArgumentParser(description="ROMRename Command Line Interface")
     parser.add_argument("-s", "--source", required=True, help="Source directory containing ROMs")
     parser.add_argument("-o", "--output", help="Output directory for renamed ROMs")
@@ -20,11 +24,14 @@ def run_cli():
     parser.add_argument("--execute", action="store_true", help="Actually rename and move files (Default is Dry-Run)")
     parser.add_argument("--inplace", action="store_true", help="Overwrite original files in the source directory")
     parser.add_argument("--keep-tree", action="store_true", help="Preserve and mirror the source directory structure in the output folder")
+    parser.add_argument("--keep-tree-empty", action="store_true", help="Same as --keep-tree, and also recreate source subfolders that end up empty in the output")
     parser.add_argument("--multithread", action="store_true", help="Use multiple CPU cores for fuzzy matching (worker count auto-scales to your CPU threads and free RAM)")
     parser.add_argument("--workers", type=int, default=0, help="Max worker processes for --multithread (0 = auto)")
     parser.add_argument("-f", "--force", action="store_true", help="Bypass safety prompts (e.g., for --inplace)")
 
     args = parser.parse_args()
+    if args.keep_tree_empty:
+        args.keep_tree = True
 
     source = os.path.abspath(args.source)
     if not os.path.exists(source):
@@ -73,7 +80,7 @@ def run_cli():
     csv_writer.writerow([f"# Output: {output}"])
     csv_writer.writerow(["# --- SETTINGS ---"])
     csv_writer.writerow([f"# Threshold: {args.threshold} | Region: {args.region} | Strip Nums: {not args.no_strip_nums} | Base: {not args.no_base_only}"])
-    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Keep Tree: {args.keep_tree} | Max Items: {args.max_items}"])
+    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Keep Tree: {args.keep_tree} | Keep Empty Folders: {args.keep_tree_empty} | Max Items: {args.max_items}"])
     csv_writer.writerow([f"# Multithread: {args.multithread} | Workers: {args.workers or 'auto'}"])
     csv_writer.writerow(["# ---------------------------------------------------------"])
     csv_writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
@@ -88,6 +95,7 @@ def run_cli():
 
     pipeline = None
     max_reached = False
+    interrupted = False
 
     def hash_lookup(filepath, ext):
         matched_name = ""
@@ -210,6 +218,7 @@ def run_cli():
                 if rel_dir == '.': rel_dir = ""
                 for f in files:
                     if args.max_items > 0 and items_processed >= args.max_items:
+                        max_reached = True
                         raise KeyboardInterrupt  # trigger graceful exit
 
                     filepath = os.path.join(source, rel_dir, f) if rel_dir else os.path.join(source, f)
@@ -227,6 +236,7 @@ def run_cli():
                     finalize(rel_dir, f, rel_path, filepath, ext, is_zip, is_hash_hit, matched_name, confidence, alts, item_time)
 
     except KeyboardInterrupt:
+        interrupted = not max_reached
         print("\n\n[!] Process Interrupted (Graceful Shutdown).")
         if pipeline is not None and max_reached:
             for p, result in pipeline.drain():
@@ -236,6 +246,15 @@ def run_cli():
     finally:
         if pipeline is not None:
             pipeline.close()
+
+    folders_created = None
+    if args.execute and args.keep_tree_empty and not args.inplace:
+        if interrupted:
+            print("[!] Skipping empty folder transfer because the run was interrupted.")
+        else:
+            folders_created = file_ops.transfer_empty_folders(source, output)
+            print(f"Transferred {folders_created} empty folder(s).")
+            csv_writer.writerow([f"# Empty Folders Created: {folders_created}"])
 
     total_time = time.time() - start_time
     avg_time = (total_time / items_processed) if items_processed > 0 else 0
@@ -249,6 +268,8 @@ def run_cli():
     print(f" 100% Hash Hits        : {hash_hits}")
     print(f" Fuzzy Math Hits       : {fuzzy_hits}")
     print(f" Items Skipped         : {skipped}")
+    if folders_created is not None:
+        print(f" Empty Folders Created : {folders_created}")
     print(f" Job Receipt Saved To  : {csv_path}")
     print("="*50 + "\n")
     

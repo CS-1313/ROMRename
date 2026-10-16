@@ -71,6 +71,10 @@ The Settings & Engine tab includes a **Processing Mode** toggle. **Single-Thread
 
 ROMRename includes a powerful, headless CLI tailored for server admins, power users, and automated scripting. By default, the CLI is completely safe and runs in **Dry-Run Mode**, meaning it will only print a preview to your terminal and will *not* modify any files on your hard drive.
 
+Subfolders are always scanned recursively (use `--no-recursive` to scan only the top-level folder). Run `python main.py --help` at any time to see every flag grouped by category.
+
+> **Defaults that differ from the GUI:** the GUI mirrors the source folder tree and transfers empty folders by default, and only scans subfolders when its checkbox is ticked. The CLI scans subfolders by default but writes files to the top level of the output unless you pass `--keep-tree` or `--keep-tree-empty`.
+
 ### Basic Usage
 **1. Test a folder (Dry-Run):**
 ```bash
@@ -104,23 +108,70 @@ python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree-empty
 python main.py --source "E:\Games" --output "E:\Games_Renamed" --multithread --execute
 ```
 
+**7. Also copy the "Rejects" (files below the threshold) under their original names:**
+```bash
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --keep-rejects --execute
+```
+*(Note: Without `--keep-rejects`, files below the confidence threshold are skipped and left only in the source. With it, they are copied to the output unchanged, so the output becomes a complete copy of your library with only the matched files renamed. Combine it with `--keep-tree` or `--keep-tree-empty` to place rejects in their original subfolders; otherwise they go to the top level of the output. It is ignored with `--inplace`, where rejects are already in place. This matches the GUI's **Transfer 'Rejects' (Keeping Original Name)** option.)*
+
+**8. Handle duplicate names and exclude junk:**
+```bash
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --duplicates skip --exclude-folder "arcade" --exclude-folder "anbernic/saves" --exclude-ext .txt --exclude-ext .nfo --execute
+```
+*(Note: When two files match the same official name, `--duplicates append` (the default) keeps both by adding ` (1)`, ` (2)`, and so on, while `--duplicates skip` keeps only the first one. Excluded folders and extensions are not matched or copied and are logged as "Skipped (Excluded)" in the Job Receipt. `--exclude-folder` takes a path relative to the source (an absolute path inside the source also works) and excludes everything below it. Both flags can be repeated. These match the GUI's duplicate options and **Exclusions** tab.)*
+
+**9. Pick a region, list more alternatives, and print full error details:**
+```bash
+python main.py --source "E:\Games" --region eu --alternatives 8 --debug
+```
+*(Note: `--region` accepts `"USA / English"`, `"Europe"`, `"Japan"`, `"World"` or `"None (Raw Math)"`, plus the shortcuts `usa`/`us`/`en`, `eu`, `jp` and `none`/`raw`. Any other value is rejected with an error. The default, `"USA / English"`, matches the GUI; use `--region none` to match without any region tie-breaking.)*
+
 ### CLI Flags Reference
+
+**Paths**
 | Flag | Description | Default |
 |---|---|---|
 | `-s`, `--source` | **(Required)** Path to the source directory containing ROMs | |
 | `-o`, `--output` | Path to the output directory (if copying) | Same as source |
+| `-d`, `--datpack` | Directory containing your DAT files | `DATPACK` |
+
+**Matching**
+| Flag | Description | Default |
+|---|---|---|
+| `-t`, `--threshold` | Minimum confidence score to rename a file (1-100) | `90` |
+| `-r`, `--region` | Region used to break ties: `"USA / English"`, `"Europe"`, `"Japan"`, `"World"`, `"None (Raw Math)"` (shortcuts: `usa`, `eu`, `jp`, `none`) | `"USA / English"` |
+| `--alternatives` | Number of alternative matches to calculate and list in the Job Receipt (1-50) | `4` |
+| `--no-strip-nums` | Do NOT strip prefix numbers (e.g., `01 - Mario`) before math | `False` |
+| `--no-base-only` | Do NOT prefer base versions. Currently only recorded in the Job Receipt; it does not change matching | `False` |
+
+**Scanning & Exclusions**
+| Flag | Description | Default |
+|---|---|---|
+| `--no-recursive` | Only scan files directly inside the source folder | `False` (Recursive) |
+| `--exclude-folder` | Exclude a subfolder (relative to the source) and everything below it. Repeatable | None |
+| `--exclude-ext` | Exclude a file extension (e.g., `.txt`). Repeatable | None |
+| `--max-items` | Limit the number of items to scan (useful for quick tests) | `0` (Infinite) |
+
+**Output**
+| Flag | Description | Default |
+|---|---|---|
+| `--execute` | Actually rename and copy/move the files | `False` (Dry-Run) |
+| `--inplace` | Overwrite original files directly in the source folder | `False` |
 | `--keep-tree` | Preserve and mirror the source directory structure in the output folder | `False` |
 | `--keep-tree-empty` | Same as `--keep-tree`, and also recreate source subfolders that end up empty in the output | `False` |
+| `--keep-rejects` | Copy files below the confidence threshold to the output under their original names (ignored with `--inplace`) | `False` |
+| `--duplicates` | What to do when two files get the same name: `append` (keep both, add ` (1)`) or `skip` (keep the first) | `append` |
+
+**Performance**
+| Flag | Description | Default |
+|---|---|---|
 | `--multithread` | Use multiple CPU cores for fuzzy matching. Worker count auto-scales to your CPU threads (leaving one free) and available RAM | `False` |
 | `--workers` | Cap the number of worker processes used by `--multithread` | `0` (Auto) |
-| `--execute` | Actually rename/move the files | `False` (Dry-Run) |
-| `--inplace` | Overwrite original files directly in the source folder | `False` |
+
+**Safety & Debugging**
+| Flag | Description | Default |
+|---|---|---|
 | `-f`, `--force` | Bypass the safety confirmation prompt for `--inplace` | `False` |
-| `-t`, `--threshold` | Minimum confidence score to rename a file (1-100) | `90` |
-| `-r`, `--region` | Prioritize a region (e.g., `"USA"`, `"Japan"`) | `"None (Raw Math)"`|
-| `--max-items` | Limit the number of items to scan (useful for quick tests) | `0` (Infinite) |
-| `--no-strip-nums` | Do NOT strip prefix numbers (e.g., `01 - Mario`) before math | `False` |
-| `--no-base-only`  | Allow Rev/Beta/Demo tags in matches | `False` |
+| `--debug` | Print full error details (tracebacks), including normally ignored errors such as unreadable files | `False` |
 
-*All CLI executions automatically generate a `Job_Receipt_YYYYMMDD_HHMMSS.csv` in your source's `Logs/Job Receipts/` directory!*
-
+*All CLI runs (including Dry-Runs) automatically generate a `Job_Receipt_YYYYMMDD_HHMMSS.csv` in ROMRename's `Logs/Job Receipts/` folder, listing every setting used and the action taken for each file.*

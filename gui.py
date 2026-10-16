@@ -188,7 +188,11 @@ class ROMRenameApp:
         tk.Checkbutton(frame_filters, text='Hide Path Names in "Original" Column', variable=self.hide_paths_var, command=self.refresh_preview).grid(row=4, column=0, columnspan=2, sticky="w", padx=10, pady=5)
         
         self.mirror_tree_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(frame_filters, text="Mirror Source Folder Tree", variable=self.mirror_tree_var, command=self.refresh_preview).grid(row=5, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+        tk.Checkbutton(frame_filters, text="Mirror Source Folder Tree", variable=self.mirror_tree_var, command=lambda: [self.toggle_mirror_tree(), self.refresh_preview()]).grid(row=5, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+        
+        self.transfer_empty_var = tk.BooleanVar(value=True)
+        self.transfer_empty_cb = tk.Checkbutton(frame_filters, text="Transfer Empty Folders", variable=self.transfer_empty_var)
+        self.transfer_empty_cb.grid(row=6, column=0, columnspan=2, sticky="w", padx=35, pady=5)
         
         frame_engine = tk.LabelFrame(self.tab_settings, text="Ghost Math Engine Preferences")
         frame_engine.pack(fill="x", padx=10, pady=10)
@@ -555,6 +559,33 @@ class ROMRenameApp:
         tk.Button(frame, text="Browse", command=lambda: var.set(filedialog.askdirectory())).pack(side="left")
         return frame
         
+    def toggle_mirror_tree(self):
+        self.transfer_empty_cb.config(state="normal" if self.mirror_tree_var.get() else "disabled")
+
+    def transfer_empty_folders(self, src, out):
+        if not out or os.path.normcase(os.path.abspath(src)) == os.path.normcase(os.path.abspath(out)):
+            return 0
+        out_abs = os.path.normcase(os.path.abspath(out))
+        created = 0
+        for root_dir, dirs, _ in os.walk(src):
+            rel_dir = os.path.relpath(root_dir, src)
+            kept = []
+            for d in dirs:
+                d_rel = os.path.join(rel_dir, d) if rel_dir != '.' else d
+                d_abs = os.path.normcase(os.path.abspath(os.path.join(root_dir, d)))
+                if d_abs == out_abs or self.check_excluded(d_rel, ""):
+                    continue
+                kept.append(d)
+                target = os.path.join(out, d_rel)
+                if not os.path.isdir(target):
+                    try:
+                        os.makedirs(target, exist_ok=True)
+                        created += 1
+                    except Exception as e:
+                        self.log(f"Error creating folder {d_rel}: {e}")
+            dirs[:] = kept
+        return created
+
     def toggle_inplace(self):
         if self.inplace_var.get():
             messagebox.showwarning("Warning", "'Overwrite Source Files' will modify your files directly in the original Source folder! Make sure you have backups.")
@@ -1104,7 +1135,7 @@ class ROMRenameApp:
             writer.writerow(["# --- SETTINGS ---"])
             writer.writerow([f"# Threshold: {self.slider_var.get()} | Region: {self.region_var.get()} | Strip Nums: {self.strip_num_var.get()} | Base: {self.prefer_base_var.get()}"])
             writer.writerow([f"# Duplicates: {self.dup_var.get()} | Overwrite: {self.inplace_var.get()} | Transfer Rejects: {self.copy_rejects_var.get()}"])
-            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()} | Hide Paths: {getattr(self, 'hide_paths_var', tk.BooleanVar(value=False)).get()} | Mirror Tree: {getattr(self, 'mirror_tree_var', tk.BooleanVar(value=True)).get()}"])
+            writer.writerow([f"# Hide Skipped: {self.hide_ignored_var.get()} | Hide 100%: {self.hide_hash_var.get()} | Hide Below Thresh: {self.hide_low_conf_var.get()} | Hide Paths: {getattr(self, 'hide_paths_var', tk.BooleanVar(value=False)).get()} | Mirror Tree: {getattr(self, 'mirror_tree_var', tk.BooleanVar(value=True)).get()} | Transfer Empty Folders: {getattr(self, 'transfer_empty_var', tk.BooleanVar(value=True)).get()}"])
             writer.writerow(["# ---------------------------------------------------------"])
             
             writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
@@ -1405,6 +1436,10 @@ class ROMRenameApp:
                 self.root.update_idletasks()
                 last_ui = time.time()
                 
+        if not self.cancel_flag and not self.inplace_var.get() and self.mirror_tree_var.get() and self.transfer_empty_var.get() and self.scan_subfolders_var.get():
+            created = self.transfer_empty_folders(src, out)
+            self.log(f"Transferred {created} empty folder(s).")
+        
         self.prog_var.set(0)
         self.eta_var.set("ETA: --:--")
         self.items_var.set(f"Items Remaining: {total:,}/{total:,}" if total > 0 else "Items Remaining: --/--")

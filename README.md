@@ -25,7 +25,7 @@ If you prefer to use your own custom database files (like specific No-Intro or R
   ```
 
 **Then:**
-1. Open or navigate into the folder (`cd ROMRename` if in terminal).
+1. Navigate into the folder (`cd ROMRename` for Git, or `cd ROMRename-main` if you extracted the ZIP).
 2. Drop your `.dat` or `.xml` files directly into the included `DATPACK/` folder.
 3. Launch the app by **double-clicking `main.py`** (Windows) or running `python main.py` / `python3 main.py` in your terminal. *(See [Usage & OS Compatibility](#usage--os-compatibility) below for details).*
 

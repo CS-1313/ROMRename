@@ -11,7 +11,7 @@ ROMRename is a powerful, GUI and CLI-driven utility for batch renaming, organizi
 There are two ways to get ROMRename up and running:
 
 ### Option 1: The One-Stop Shop (Recommended)
-Head over to the **[Releases](../../releases)** tab on the right side of this page and download the latest `ROMRename_vX.zip`. This is a complete, ready-to-run package that includes the application AND a pre-configured `DATPACK` folder containing all the official hashes you need. Just extract the ZIP, and double-click `main.py` (or run `python main.py` in your terminal).
+Head over to the **[Releases](../../releases)** tab on the right side of this page and download the latest `ROMRename_vX.zip`. This is a complete, ready-to-run package that includes the application AND a pre-configured `DATPACK` folder containing all the official hashes you need. Just extract the ZIP, and double-click `main.py` (or run `py main.py` in your terminal).
 
 *Included DATPACK Version: **No-Intro Love Pack (DAT) (2026-09-30)**. Special thanks and full credit to the [No-Intro Dat-O-Matic](https://datomatic.no-intro.org/) project for this daily version package!*
 
@@ -27,7 +27,7 @@ If you prefer to use your own custom database files (like specific No-Intro or R
 **Then:**
 1. Navigate into the folder (`cd ROMRename` for Git, or `cd ROMRename-main` if you extracted the ZIP).
 2. Drop your `.dat` or `.xml` files directly into the included `DATPACK/` folder.
-3. Launch the app by **double-clicking `main.py`** (Windows) or running `python main.py` / `python3 main.py` in your terminal. *(See [Usage & OS Compatibility](#usage--os-compatibility) below for details).*
+3. Launch the app by **double-clicking `main.py`** (Windows) or running `py main.py` (Windows) / `python3 main.py` (Mac/Linux) in your terminal. *(See [Usage & OS Compatibility](#usage--os-compatibility) below for details).*
 
 ## Features
 
@@ -53,8 +53,10 @@ ROMRename is 100% cross-platform compatible and runs entirely on built-in Python
 First, open your terminal or command prompt and navigate to the extracted folder (e.g., `cd path/to/ROMRename`). Then run the command for your OS:
 
 ### Windows
+Double-click `main.py`, or open PowerShell/Command Prompt and run:
 ```powershell
-python main.py
+py main.py
+# or: python main.py
 ```
 
 ### macOS
@@ -82,7 +84,7 @@ The Settings & Engine tab includes a **Processing Mode** toggle. **Single-Thread
 
 ROMRename includes a powerful, headless CLI tailored for server admins, power users, and automated scripting. By default, the CLI is completely safe and runs in **Dry-Run Mode**, meaning it will only print a preview to your terminal and will *not* modify any files on your hard drive.
 
-Subfolders are always scanned recursively (use `--no-recursive` to scan only the top-level folder). Run `python main.py --help` at any time to see every flag grouped by category.
+Subfolders are always scanned recursively (use `--no-recursive` to scan only the top-level folder). Run `py main.py --help` (or `python3 main.py --help`) at any time to see every flag grouped by category.
 
 > **Defaults that differ from the GUI:** the GUI mirrors the source folder tree and transfers empty folders by default, and only scans subfolders when its checkbox is ticked. The CLI scans subfolders by default but writes files to the top level of the output unless you pass `--keep-tree` or `--keep-tree-empty`.
 

@@ -22,7 +22,7 @@ If you prefer to use your own custom database files (like specific No-Intro or R
 
 - **Dual-Engine Matching (Hash + Math)**: Ingests massive XML/DAT databases to build a master index. Scanned files are first checked for perfect CRC32 hash hits. If unknown, the "Ghost Math Engine" strips away junk metadata and uses advanced fuzzy string comparison to predict the correct official title.
 - **Interactive Safe-Preview UI**: Review a complete virtual plan before a single file is touched. You can manually override matches, dynamically hide low-confidence items, or tweak Region biases and watch the list recalculate instantly in RAM without re-reading your hard drive.
-- **Granular Library Control (1G1R)**: Dial in your exact preferences to build the perfect clean library. Prioritize specific regions to break ties, automatically strip numbered prefixes, prefer shorter "Base" names, and explicitly exclude junk file types (like `.nfo` or `.txt`).
+- **Granular Library Control (1G1R)**: Dial in your exact preferences to build the perfect clean library. Prioritize specific regions to break ties, automatically strip numbered prefixes, prefer retail "Base" versions over Beta/Proto/Demo/LodgeNet/Unl/Pirate/Rev releases, and explicitly exclude junk file types (like `.nfo` or `.txt`).
 - **Bulletproof Execution & QA**: Choose to safely copy files to a new folder or overwrite them in-place. The app natively extracts `.zip` and `.7z` archives in an isolated sandbox, generates highly detailed `.csv` Job Receipts for every run, and includes a full headless CLI for automation.
 
 ## How It Works
@@ -142,7 +142,7 @@ python main.py --source "E:\Games" --region eu --alternatives 8 --debug
 | `-r`, `--region` | Region used to break ties: `"USA / English"`, `"Europe"`, `"Japan"`, `"World"`, `"None (Raw Math)"` (shortcuts: `usa`, `eu`, `jp`, `none`) | `"USA / English"` |
 | `--alternatives` | Number of alternative matches to calculate and list in the Job Receipt (1-50) | `4` |
 | `--no-strip-nums` | Do NOT strip prefix numbers (e.g., `01 - Mario`) before math | `False` |
-| `--no-base-only` | Do NOT prefer base versions. Currently only recorded in the Job Receipt; it does not change matching | `False` |
+| `--no-base-only` | Do NOT prefer base versions. By default, when several versions of a game match equally well, the plain retail release wins over Beta, Proto, Demo, LodgeNet, Kiosk, Unl, Pirate, Hack, Addon/Update, Rev and Alt versions (unless your filename itself contains that tag, e.g. `(Beta)`). Same as unticking the GUI's **Prefer Base Versions** | `False` |
 
 **Scanning & Exclusions**
 | Flag | Description | Default |

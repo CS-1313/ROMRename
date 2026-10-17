@@ -61,7 +61,7 @@ def ram_info():
 
 
 def engine_state(engine):
-    state = {"is_raw_math": engine.is_raw_math, "strip_n": engine.strip_n}
+    state = {"is_raw_math": engine.is_raw_math, "strip_n": engine.strip_n, "prefer_base": engine.prefer_base}
     if engine.is_raw_math:
         state["name_db"] = engine.name_db
     else:
@@ -126,6 +126,7 @@ def _init_worker(state_bytes):
     eng = MatchEngine()
     eng.is_raw_math = state["is_raw_math"]
     eng.strip_n = state["strip_n"]
+    eng.prefer_base = state["prefer_base"]
     if eng.is_raw_math:
         eng.name_db = state["name_db"]
         eng.name_set = set(eng.name_db)

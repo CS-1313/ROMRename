@@ -613,6 +613,7 @@ class ROMRenameApp:
     def update_math_engine(self):
         is_raw = (self.region_var.get() == "None (Raw Math)")
         strip_n = self.strip_num_var.get()
+        self.engine.prefer_base = self.prefer_base_var.get()
         self.engine.update_math(is_raw, strip_n, self.log)
         self.engine_version += 1
 
@@ -640,34 +641,6 @@ class ROMRenameApp:
             threading.Thread(target=self.recalc_thread, args=(was_scanning,), daemon=True).start()
 
 
-
-    def break_ties_list(self, candidates, orig_raw):
-        if len(candidates) == 1: return candidates
-        region_setting = self.region_var.get()
-        scores = [(c, difflib.SequenceMatcher(None, orig_raw, c).ratio()) for c in candidates]
-        scores.sort(key=lambda x: x[1], reverse=True)
-        if len(scores) > 1 and (scores[0][1] > scores[1][1] + 0.05): 
-            return [x[0] for x in scores]
-            
-        region_aliases = []
-        if region_setting == "USA / English": region_aliases = ["USA", "US", "En", "English", "World"]
-        elif region_setting == "Europe": region_aliases = ["Europe", "EU", "En"]
-        elif region_setting == "Japan": region_aliases = ["Japan", "JP", "Ja"]
-        elif region_setting == "World": region_aliases = ["World", "USA", "En", "Europe"]
-            
-        preferred = []
-        others = []
-        for c, _ in scores:
-            if region_aliases and any(re.search(r'\b' + a + r'\b', c, re.IGNORECASE) for a in region_aliases):
-                preferred.append(c)
-            else:
-                others.append(c)
-                
-        if self.prefer_base_var.get():
-            preferred.sort(key=len)
-            others.sort(key=len)
-            
-        return preferred + others
 
     def recalc_thread(self, was_scanning_active):
         try:

@@ -41,7 +41,7 @@ def run_cli():
     g_match.add_argument("-r", "--region", type=parse_region, default="USA / English", metavar="REGION", help="Region preference used to break ties: 'USA / English' (or usa, us, en), 'Europe' (or eu), 'Japan' (or jp), 'World', 'None (Raw Math)' (or none, raw). Default: 'USA / English'")
     g_match.add_argument("--alternatives", type=int, default=4, metavar="N", help="Number of alternative matches to calculate and list in the Job Receipt, 1-50 (default: 4)")
     g_match.add_argument("--no-strip-nums", action="store_true", help="Do NOT strip number prefixes (e.g. '01 - Mario') from files before matching")
-    g_match.add_argument("--no-base-only", action="store_true", help="Do NOT prefer base versions (recorded in the Job Receipt only; currently has no effect on matching)")
+    g_match.add_argument("--no-base-only", action="store_true", help="Do NOT prefer base versions when several versions tie (by default plain retail releases win over Beta/Proto/Demo/LodgeNet/Unl/Pirate/Rev/Alt and similar)")
 
     g_scan = parser.add_argument_group("Scanning & Exclusions")
     g_scan.add_argument("--no-recursive", action="store_true", help="Only scan files directly inside the source folder (subfolders are scanned by default)")
@@ -140,6 +140,7 @@ def run_cli():
 
     eng.is_raw_math = (args.region == "None (Raw Math)")
     eng.strip_n = not args.no_strip_nums
+    eng.prefer_base = not args.no_base_only
     eng.update_math(eng.is_raw_math, eng.strip_n, print)
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

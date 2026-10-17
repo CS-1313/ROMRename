@@ -11,12 +11,23 @@ ROMRename is a powerful, GUI and CLI-driven utility for batch renaming, organizi
 There are two ways to get ROMRename up and running:
 
 ### Option 1: The One-Stop Shop (Recommended)
-Head over to the **[Releases](../../releases)** tab on the right side of this page and download the latest ROMRename_vX.zip. This is a complete, ready-to-run package that includes the application AND a pre-configured DATPACK folder containing all the official hashes you need. Just extract it and run.
+Head over to the **[Releases](../../releases)** tab on the right side of this page and download the latest `ROMRename_vX.zip`. This is a complete, ready-to-run package that includes the application AND a pre-configured `DATPACK` folder containing all the official hashes you need. Just extract the ZIP, and double-click `main.py` (or run `python main.py` in your terminal).
 
 *Included DATPACK Version: **No-Intro Love Pack (DAT) (2026-09-30)**. Special thanks and full credit to the [No-Intro Dat-O-Matic](https://datomatic.no-intro.org/) project for this daily version package!*
 
 ### Option 2: Source Code Only (Bring Your Own DATs)
-If you prefer to use your own custom database files (like specific No-Intro or ReDump sets), you can download the source code here. Simply create a folder named DATPACK in the same directory as the script, drop your .dat or .xml files inside, and run the app.
+If you prefer to use your own custom database files (like specific No-Intro or ReDump sets), grab the source code:
+
+- **Direct Download (No Git required)**: Click **[Download Source (.zip)](https://github.com/CS-1313/ROMRename/archive/refs/heads/main.zip)** (or use the green **`<> Code`** button at the top of this page).
+- **Or via Terminal**:
+  ```bash
+  git clone https://github.com/CS-1313/ROMRename.git
+  ```
+
+**Then:**
+1. Open or navigate into the folder (`cd ROMRename` if in terminal).
+2. Drop your `.dat` or `.xml` files directly into the included `DATPACK/` folder.
+3. Launch the app by **double-clicking `main.py`** (Windows) or running `python main.py` / `python3 main.py` in your terminal. *(See [Usage & OS Compatibility](#usage--os-compatibility) below for details).*
 
 ## Features
 

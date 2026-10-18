@@ -26,3 +26,4 @@ Job_Receipt_*.csv
 Audit_*.csv
 Logs/
 *.zip
+pack_release.py

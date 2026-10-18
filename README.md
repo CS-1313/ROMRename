@@ -38,10 +38,11 @@ If you prefer to use your own custom database files (like specific No-Intro or R
 
 ## How It Works
 
-1. **Load DATs**: Point the application to your DATPACK folder. It will parse the XML/DAT files and cache the official names and CRC32 hashes.
-2. **Scan**: Point the application to your Source directory containing your ROMs. The app calculates the CRC32 hash of each file for perfect matches. If the hash is unknown, it falls back to the Fuzzy/Ghost Math Engine to predict the correct official title.
-3. **Review**: Check the proposed matches in the UI.
-4. **Execute**: The app automatically renames your files to perfectly match the DAT specifications.
+1. **Load DATs (Automatic)**: The application automatically detects and points to the included `DATPACK/` folder. It parses any XML/DAT files within `DATPACK/` and caches the official names and CRC32 hashes (you can also browse to point it to a custom DAT directory).
+2. **Configure Settings & Exclusions (Optional)**: Head to the **Settings & Engine** and **Exclusions** tabs to tailor your run. Set your preferred Region bias, toggle Multi-Core mode, or exclude unwanted subfolders and file extensions (like `.txt` or `.nfo`).
+3. **Scan**: Select your Source ROM directory (and choose an Output directory if copying). Click **Scan** to run a completely safe, non-destructive dry run. The app checks CRC32 hashes for perfect matches and uses the Fuzzy/Ghost Math Engine to predict official titles for anything unrecognized.
+4. **Review**: Inspect proposed matches in the **Master Preview**. Filter by confidence, search columns, or use the interactive dropdowns to swap to alternative title suggestions or override individual file actions.
+5. **Execute**: Click **EXECUTE** to rename and organize your files to perfectly match official DAT specifications.
 
 ## Requirements
 - Python 3.8 or higher.
@@ -84,9 +85,9 @@ The Settings & Engine tab includes a **Processing Mode** toggle. **Single-Thread
 
 ROMRename includes a powerful, headless CLI tailored for server admins, power users, and automated scripting. By default, the CLI is completely safe and runs in **Dry-Run Mode**, meaning it will only print a preview to your terminal and will *not* modify any files on your hard drive.
 
-Subfolders are always scanned recursively (use `--no-recursive` to scan only the top-level folder). Run `py main.py --help` (or `python3 main.py --help`) at any time to see every flag grouped by category.
+Subfolders are always scanned recursively (use `--no-recursive` to scan only the top-level folder) and the source folder tree is mirrored in the output (use `--flatten` to write all files to the top level instead). Run `py main.py --help` (or `python3 main.py --help`) at any time to see every flag grouped by category.
 
-> **Defaults that differ from the GUI:** the GUI mirrors the source folder tree and transfers empty folders by default, and only scans subfolders when its checkbox is ticked. The CLI scans subfolders by default but writes files to the top level of the output unless you pass `--keep-tree` or `--keep-tree-empty`.
+> **CLI and GUI share the same defaults:** both recursively scan subfolders, mirror the source folder tree, and do not transfer empty folders. Pass `--flatten` to write all output files flat, or `--transfer-empty` to recreate source subfolders that end up empty.
 
 ### Basic Usage
 **1. Test a folder (Dry-Run):**
@@ -94,7 +95,7 @@ Subfolders are always scanned recursively (use `--no-recursive` to scan only the
 python main.py --source "E:\Games"
 ```
 
-**2. Execute and copy renamed files to a new folder:**
+**2. Execute and copy renamed files to a new folder (tree is mirrored by default):**
 ```bash
 python main.py --source "E:\Games" --output "E:\Games_Renamed" --execute
 ```
@@ -105,16 +106,16 @@ python main.py --source "E:\Games" --execute --inplace
 ```
 *(Note: Using `--inplace` will instantly trigger a safety prompt. To bypass this prompt in automated scripts, simply append `-f` or `--force`).*
 
-**4. Execute, copy to a new folder, and mirror subfolder structure:**
+**4. Execute, copy to a new folder, but flatten into one directory:**
 ```bash
-python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --execute
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --flatten --execute
 ```
 
-**5. Mirror the subfolder structure AND keep empty folders:**
+**5. Mirror the subfolder structure AND recreate empty folders:**
 ```bash
-python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree-empty --execute
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --transfer-empty --execute
 ```
-*(Note: `--keep-tree-empty` already includes `--keep-tree`, so you don't need both. After the files are copied, every source subfolder still missing from the output is recreated, including folders whose files were all skipped. It is ignored with `--inplace` (the folders are already there) and skipped if you interrupt the run with Ctrl+C. This matches the GUI's **Transfer Empty Folders** option.)*
+*(Note: `--transfer-empty` recreates every source subfolder still missing from the output, including folders whose files were all skipped. It is ignored with `--inplace` (the folders are already there) and skipped if you interrupt the run with Ctrl+C. This matches the GUI's **Transfer Empty Folders** checkbox.)*
 
 **6. Use all available CPU cores (Multi-Core mode):**
 ```bash
@@ -123,13 +124,13 @@ python main.py --source "E:\Games" --output "E:\Games_Renamed" --multithread --e
 
 **7. Also copy the "Rejects" (files below the threshold) under their original names:**
 ```bash
-python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --keep-rejects --execute
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-rejects --execute
 ```
-*(Note: Without `--keep-rejects`, files below the confidence threshold are skipped and left only in the source. With it, they are copied to the output unchanged, so the output becomes a complete copy of your library with only the matched files renamed. Combine it with `--keep-tree` or `--keep-tree-empty` to place rejects in their original subfolders; otherwise they go to the top level of the output. It is ignored with `--inplace`, where rejects are already in place. This matches the GUI's **Transfer 'Rejects' (Keeping Original Name)** option.)*
+*(Note: Without `--keep-rejects`, files below the confidence threshold are skipped and left only in the source. With it, they are copied to the output unchanged, so the output becomes a complete copy of your library with only the matched files renamed. By default rejects are placed in their original subfolders (tree mirroring); with `--flatten` they go to the top level. It is ignored with `--inplace`, where rejects are already in place. This matches the GUI's **Transfer 'Rejects' (Keeping Original Name)** option.)*
 
 **8. Handle duplicate names and exclude junk:**
 ```bash
-python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --duplicates skip --exclude-folder "arcade" --exclude-folder "anbernic/saves" --exclude-ext .txt --exclude-ext .nfo --execute
+python main.py --source "E:\Games" --output "E:\Games_Renamed" --duplicates skip --exclude-folder "arcade" --exclude-folder "anbernic/saves" --exclude-ext .txt --exclude-ext .nfo --execute
 ```
 *(Note: When two files match the same official name, `--duplicates append` (the default) keeps both by adding ` (1)`, ` (2)`, and so on, while `--duplicates skip` keeps only the first one. Excluded folders and extensions are not matched or copied and are logged as "Skipped (Excluded)" in the Job Receipt. `--exclude-folder` takes a path relative to the source (an absolute path inside the source also works) and excludes everything below it. Both flags can be repeated. These match the GUI's duplicate options and **Exclusions** tab.)*
 
@@ -137,7 +138,7 @@ python main.py --source "E:\Games" --output "E:\Games_Renamed" --keep-tree --dup
 ```bash
 python main.py --source "E:\Games" --region eu --alternatives 8 --debug
 ```
-*(Note: `--region` accepts `"USA / English"`, `"Europe"`, `"Japan"`, `"World"` or `"None (Raw Math)"`, plus the shortcuts `usa`/`us`/`en`, `eu`, `jp` and `none`/`raw`. Any other value is rejected with an error. The default, `"USA / English"`, matches the GUI; use `--region none` to match without any region tie-breaking.)*
+*(Note: `--alternatives` sets how many near-miss alternative titles are calculated and logged in the Job Receipt CSV for post-run review. Because the headless CLI is automated, it always renames files using the top-ranked match; to interactively review and swap between alternative titles with dropdowns, use the GUI's **Master Preview**. `--region` accepts `"USA / English"`, `"Europe"`, `"Japan"`, `"World"` or `"None (Raw Math)"`, plus the shortcuts `usa`/`us`/`en`, `eu`, `jp` and `none`/`raw`. The default, `"USA / English"`, matches the GUI; use `--region none` to match without any region tie-breaking.)*
 
 ### CLI Flags Reference
 
@@ -170,8 +171,8 @@ python main.py --source "E:\Games" --region eu --alternatives 8 --debug
 |---|---|---|
 | `--execute` | Actually rename and copy/move the files | `False` (Dry-Run) |
 | `--inplace` | Overwrite original files directly in the source folder | `False` |
-| `--keep-tree` | Preserve and mirror the source directory structure in the output folder | `False` |
-| `--keep-tree-empty` | Same as `--keep-tree`, and also recreate source subfolders that end up empty in the output | `False` |
+| `--flatten` | Write all output files to the top level of the output folder instead of mirroring the source directory tree | `False` (Mirror) |
+| `--transfer-empty` | Recreate source subfolders that end up empty in the output (cannot be combined with `--flatten`) | `False` |
 | `--keep-rejects` | Copy files below the confidence threshold to the output under their original names (ignored with `--inplace`) | `False` |
 | `--duplicates` | What to do when two files get the same name: `append` (keep both, add ` (1)`) or `skip` (keep the first) | `append` |
 

@@ -28,8 +28,8 @@ def run_cli():
     except Exception:
         pass
     parser = argparse.ArgumentParser(
-        description="ROMRename Command Line Interface. Runs in Dry-Run mode unless --execute is given. Subfolders are scanned recursively unless --no-recursive is given.",
-        epilog='Example: python main.py -s "E:\\Games" -o "E:\\Games_Renamed" --keep-tree-empty --keep-rejects --multithread --execute')
+        description="ROMRename Command Line Interface. Runs in Dry-Run mode unless --execute is given. Subfolders are scanned recursively unless --no-recursive is given. The source folder tree is mirrored in the output unless --flatten is given.",
+        epilog='Example: python main.py -s "E:\\Games" -o "E:\\Games_Renamed" --transfer-empty --keep-rejects --multithread --execute')
 
     g_paths = parser.add_argument_group("Paths")
     g_paths.add_argument("-s", "--source", required=True, help="Source directory containing ROMs")
@@ -52,8 +52,8 @@ def run_cli():
     g_out = parser.add_argument_group("Output")
     g_out.add_argument("--execute", action="store_true", help="Actually rename and copy/move files (default is Dry-Run)")
     g_out.add_argument("--inplace", action="store_true", help="Overwrite original files in the source directory")
-    g_out.add_argument("--keep-tree", action="store_true", help="Preserve and mirror the source directory structure in the output folder")
-    g_out.add_argument("--keep-tree-empty", action="store_true", help="Same as --keep-tree, and also recreate source subfolders that end up empty in the output")
+    g_out.add_argument("--flatten", action="store_true", help="Write all output files to the top level of the output folder instead of mirroring the source directory tree (default: mirror the tree)")
+    g_out.add_argument("--transfer-empty", action="store_true", help="Recreate source subfolders that end up empty in the output (only applies when mirroring the tree)")
     g_out.add_argument("--keep-rejects", action="store_true", help="Copy files below the threshold to the output folder under their original names (ignored with --inplace)")
     g_out.add_argument("--duplicates", choices=["append", "skip"], default="append", help="When two files get the same name: 'append' keeps both by adding ' (1)', ' (2)'..., 'skip' keeps only the first (default: append)")
 
@@ -68,8 +68,8 @@ def run_cli():
     args = parser.parse_args()
     if not 1 <= args.alternatives <= 50:
         parser.error("--alternatives must be between 1 and 50")
-    if args.keep_tree_empty:
-        args.keep_tree = True
+    if args.flatten and args.transfer_empty:
+        parser.error("--transfer-empty cannot be used with --flatten (there is no tree to transfer)")
 
     source = os.path.abspath(args.source)
     if not os.path.exists(source):
@@ -157,7 +157,7 @@ def run_cli():
     csv_writer.writerow(["# --- SETTINGS ---"])
     csv_writer.writerow([f"# Threshold: {args.threshold} | Region: {args.region} | Strip Nums: {not args.no_strip_nums} | Base: {not args.no_base_only} | Alternatives: {args.alternatives}"])
     csv_writer.writerow([f"# Duplicates: {args.duplicates} | Recursive: {not args.no_recursive} | Excluded Folders: {', '.join(excluded_folders) or 'None'} | Excluded Exts: {', '.join(excluded_exts) or 'None'} | Debug: {args.debug}"])
-    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Keep Tree: {args.keep_tree} | Keep Empty Folders: {args.keep_tree_empty} | Keep Rejects: {args.keep_rejects} | Max Items: {args.max_items}"])
+    csv_writer.writerow([f"# Execute Mode: {args.execute} | In-Place: {args.inplace} | Flatten: {args.flatten} | Transfer Empty Folders: {args.transfer_empty} | Keep Rejects: {args.keep_rejects} | Max Items: {args.max_items}"])
     csv_writer.writerow([f"# Multithread: {args.multithread} | Workers: {args.workers or 'auto'}"])
     csv_writer.writerow(["# ---------------------------------------------------------"])
     csv_writer.writerow(["Original File", "Proposed Name", "Confidence", "Match Type", "Action Taken", "Alternatives"])
@@ -232,7 +232,7 @@ def run_cli():
                 
             out_ext = ext if not is_zip else ".zip"
             final_name = matched_name + out_ext
-            is_mirrored = args.inplace or args.keep_tree
+            is_mirrored = args.inplace or not args.flatten
             dest_rel = os.path.join(rel_dir, final_name) if (is_mirrored and rel_dir) else final_name
             dup_key = os.path.normcase(dest_rel)
             dup_note = ""
@@ -276,7 +276,7 @@ def run_cli():
                     report_error(f"Error processing {rel_path}", e)
         elif copy_rejects:
             rejects_kept += 1
-            dest_rel = rel_path if args.keep_tree else f
+            dest_rel = rel_path if not args.flatten else f
             csv_action = "Kept Original Name" if args.execute else "Simulated Keep Original Name (Dry-Run)"
             csv_writer.writerow([rel_path, matched_name, f"{confidence}%", "Fuzzy", csv_action, alts_str])
             print(f"[{items_processed}] {rel_path} -> {dest_rel} | Reject, Original Name Kept (Below Threshold: {confidence}%) | {item_time:.2f}s")
@@ -353,7 +353,7 @@ def run_cli():
             pipeline.close()
 
     folders_created = None
-    if args.execute and args.keep_tree_empty and not args.inplace:
+    if args.execute and args.transfer_empty and not args.inplace:
         if interrupted:
             print("[!] Skipping empty folder transfer because the run was interrupted.")
         elif args.no_recursive:

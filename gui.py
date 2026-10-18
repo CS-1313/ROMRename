@@ -107,7 +107,7 @@ class ROMRenameApp:
         self.add_path_row(path_left, "Source ROMs:", self.src_var)
         self.out_row = self.add_path_row(path_left, "Output Folder:", self.out_var)
         self.add_path_row(path_left, "DATPACK Folder:", self.dat_var)
-        self.scan_subfolders_var = tk.BooleanVar(value=False)
+        self.scan_subfolders_var = tk.BooleanVar(value=True)
         tk.Checkbutton(path_left, text="Scan Subfolders (Recursively process all child directories)", variable=self.scan_subfolders_var).pack(anchor="w", padx=10, pady=2)
         
         # Move Scan button here
@@ -190,7 +190,7 @@ class ROMRenameApp:
         self.mirror_tree_var = tk.BooleanVar(value=True)
         tk.Checkbutton(frame_filters, text="Mirror Source Folder Tree", variable=self.mirror_tree_var, command=lambda: [self.toggle_mirror_tree(), self.refresh_preview()]).grid(row=5, column=0, columnspan=2, sticky="w", padx=10, pady=5)
         
-        self.transfer_empty_var = tk.BooleanVar(value=True)
+        self.transfer_empty_var = tk.BooleanVar(value=False)
         self.transfer_empty_cb = tk.Checkbutton(frame_filters, text="Transfer Empty Folders", variable=self.transfer_empty_var)
         self.transfer_empty_cb.grid(row=6, column=0, columnspan=2, sticky="w", padx=35, pady=5)
         
